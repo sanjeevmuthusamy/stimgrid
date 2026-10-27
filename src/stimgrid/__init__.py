@@ -1,0 +1,16 @@
+"""stimgrid: fit stimulation pulses to what a stimulator can actually produce.
+
+Rounds a planned pulse to a device's amplitude and timing steps, reports what is
+really delivered, and finds the nearest exactly charge-balanced pulse.
+For research use; check results on your own hardware.
+"""
+
+from .devices import PRESETS, Device, cortical_labs_cl, intan_rhs2116, preset
+from .fit import Delivered, FitReport, Issue, Pulse, RateFit, Rates, fit
+from .loader import InputError, from_dict, load
+
+__version__ = "0.1.0"
+__all__ = [
+    "PRESETS", "Delivered", "Device", "FitReport", "InputError", "Issue", "Pulse", "RateFit", "Rates",
+    "cortical_labs_cl", "fit", "from_dict", "intan_rhs2116", "load", "preset", "__version__",
+]

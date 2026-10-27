@@ -1,0 +1,6 @@
+{
+  "stimgrid": 1,
+  "device": {"preset": "cortical-labs-cl"},
+  "pulse": {"amplitude_ua": 2.5, "width_us": 110, "second_amplitude_ua": 0.7, "second_width_us": 390},
+  "rates": {"frequency_hz": 130}
+}

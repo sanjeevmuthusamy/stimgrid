@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stimgrid"
+version = "0.1.0"
+description = "Fit stimulation pulses to what a stimulator can actually produce, and find the nearest exactly charge-balanced pulse."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [{ name = "Sanjeev Muthusamy" }]
+dependencies = []
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering",
+]
+
+[project.urls]
+Homepage = "https://github.com/sanjeevmuthusamy/stimgrid"
+Issues = "https://github.com/sanjeevmuthusamy/stimgrid/issues"
+
+[project.scripts]
+stimgrid = "stimgrid.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

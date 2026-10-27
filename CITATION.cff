@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use stimgrid in your research, please cite it as below."
+type: software
+title: "stimgrid"
+abstract: >-
+  Fits planned electrical stimulation pulses to a stimulator's real amplitude and
+  timing resolution, reports what is actually delivered, and finds the nearest
+  exactly charge-balanced pulse on the device grid.
+authors:
+  - family-names: "Muthusamy"
+    given-names: "Sanjeev"
+version: "0.1.0"
+license: MIT
+repository-code: "https://github.com/sanjeevmuthusamy/stimgrid"
+url: "https://github.com/sanjeevmuthusamy/stimgrid"
+keywords:
+  - electrical stimulation
+  - charge balance
+  - stimulator
+  - microelectrode array
+  - neural engineering

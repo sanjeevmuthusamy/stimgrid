@@ -1,0 +1,6 @@
+{
+  "stimgrid": 1,
+  "device": {"preset": "intan-rhs2116", "step_ua": 0.1, "sample_rate_hz": 30000},
+  "pulse": {"amplitude_ua": 7.3, "width_us": 117, "second_amplitude_ua": 1.9, "second_width_us": 450},
+  "rates": {"frequency_hz": 40}
+}
