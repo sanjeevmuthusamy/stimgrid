@@ -1,5 +1,7 @@
 # stimgrid
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23694989.svg)](https://doi.org/10.5281/zenodo.23694989) [![PyPI](https://img.shields.io/pypi/v/stimgrid.svg)](https://pypi.org/project/stimgrid/) [![tests](https://github.com/sanjeevmuthusamy/stimgrid/actions/workflows/tests.yml/badge.svg)](https://github.com/sanjeevmuthusamy/stimgrid/actions/workflows/tests.yml)
+
 Your stimulator cannot produce every pulse you write down. It sets current in fixed steps and timing on
 a fixed clock, so every value gets rounded. For an asymmetric pulse (for example a short strong first
 phase and a long weak recharge phase) that rounding quietly breaks the charge balance you designed. A
@@ -274,7 +276,9 @@ print(report.balanced.as_pulse(), report.balanced.imbalance)
 If you use stimgrid in published work, please cite it. GitHub's "Cite this repository" button gives the
 reference from `CITATION.cff`:
 
-> Muthusamy S. stimgrid (version 0.2.0) [Computer software]. https://github.com/sanjeevmuthusamy/stimgrid
+> Muthusamy S. stimgrid (version 0.2.0) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.23694989
+
+This DOI always resolves to the latest version; each release also has its own DOI on Zenodo.
 
 ## Tests
 

@@ -10,6 +10,11 @@ authors:
   - family-names: "Muthusamy"
     given-names: "Sanjeev"
 version: "0.2.0"
+doi: "10.5281/zenodo.23694989"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.23694989"
+    description: "All versions of stimgrid on Zenodo"
 license: MIT
 repository-code: "https://github.com/sanjeevmuthusamy/stimgrid"
 url: "https://github.com/sanjeevmuthusamy/stimgrid"
