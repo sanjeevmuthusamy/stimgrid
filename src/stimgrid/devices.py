@@ -20,6 +20,18 @@ INTAN_SOURCE = ("Intan Technologies RHS2116 datasheet: global current step sizes
                 "8-bit magnitude; pulse timing set by the host's command timing")
 CL_SOURCE = ("Cortical Labs CL API docs (docs.corticallabs.com/cl.html), StimDesign: phase width evenly "
              "divisible by 20 µs, |current| at most 3.0 µA, charge at most 3.0 nC")
+MCS_STG4000_RANGES = {1600.0: 0.2, 16000.0: 2.0}  # max µA per channel: current step µA
+MCS_STG4000_SOURCE = ("Multi Channel Systems STG 4002/4004/4008 datasheets (1.6 mA and 16 mA versions, 2021): "
+                      "output current resolution 200 nA (1.6 mA) or 2000 nA (16 mA), time resolution 20 µs, "
+                      "maximum frequency 25 kHz")
+MCS_STG5_RANGES = {160.0: 0.1, 1600.0: 1.0, 16000.0: 10.0}
+MCS_STG5_SOURCE = ("Multi Channel Systems STG5 brochure (2024): up to 160 µA (resolution 100 nA), 1.6 mA (1 µA) "
+                   "or 16 mA (10 µA); temporal pulse resolution 5 µs, up to 100 kHz")
+TDT_IZ2_RANGES = {300.0: "IZ2 / IZ2M", 3000.0: "IZ2H / IZ2MH"}
+TDT_IZ2_MAX_RATE_HZ = 195312.5
+TDT_IZ2_SOURCE = ("Tucker-Davis Technologies IZ2 manual and IZ2M/IZ2MH spec sheet: output ±300 µA (IZ2, IZ2M) "
+                  "or ±3 mA (IZ2H, IZ2MH); the stimulator runs at the sampling rate of its RZ processor, "
+                  "pulses as short as one sample")
 
 
 @dataclass(frozen=True)
@@ -122,9 +134,60 @@ def cortical_labs_cl() -> Device:
     )
 
 
+def mcs_stg4000(range_ua: float = 1600.0) -> Device:
+    """MCS STG 4002/4004/4008 in current mode. The range is fixed by the model version you bought."""
+    step = _pick_range("the STG4000 version", range_ua, MCS_STG4000_RANGES)
+    return Device(
+        name=f"mcs-stg4000 ({range_ua / 1000:g} mA version)",
+        time_step_us=20.0,
+        amplitude_step_ua=step,
+        max_amplitude_ua=range_ua,
+        max_frequency_hz=25000.0,
+        source=MCS_STG4000_SOURCE,
+        note="Current mode. The 160 µA version is not included: its official datasheet could not be confirmed.",
+    )
+
+
+def mcs_stg5(range_ua: float = 1600.0) -> Device:
+    """MCS STG5 in current mode, in one of its three ranges."""
+    step = _pick_range("the STG5 range", range_ua, MCS_STG5_RANGES)
+    return Device(
+        name=f"mcs-stg5 (up to {range_ua:g} µA)",
+        time_step_us=5.0,
+        amplitude_step_ua=step,
+        max_amplitude_ua=range_ua,
+        max_frequency_hz=100000.0,
+        source=MCS_STG5_SOURCE,
+        note="Current mode. Figures are from the product brochure.",
+    )
+
+
+def tdt_iz2(range_ua: float = 300.0, sample_rate_hz: float = 24414.0625) -> Device:
+    """TDT IZ2-family stimulator; the timing grid is one sample of the RZ processor driving it."""
+    model = TDT_IZ2_RANGES.get(float(range_ua)) if _is_number(range_ua) else None
+    if model is None:
+        raise ValueError("range_ua must be 300 (IZ2, IZ2M) or 3000 (IZ2H, IZ2MH)")
+    _positive("sample_rate_hz", sample_rate_hz)
+    if sample_rate_hz > TDT_IZ2_MAX_RATE_HZ:
+        raise ValueError(f"sample_rate_hz is above the IZ2 family's maximum of {TDT_IZ2_MAX_RATE_HZ:g}")
+    return Device(
+        name=f"tdt-iz2 ({model}, {sample_rate_hz:g} samples/s)",
+        time_step_us=1e6 / sample_rate_hz,
+        amplitude_step_ua=None,
+        max_amplitude_ua=float(range_ua),
+        source=TDT_IZ2_SOURCE,
+        note="TDT publishes no current step, so amplitude is treated as continuous. Use your RZ's real "
+             "sampling rate (for example 24414.0625, 48828.125, 97656.25 or 195312.5); the larger IZ2 "
+             "models support only the lower rates.",
+    )
+
+
 PRESETS: Dict[str, Callable[..., Device]] = {
     "intan-rhs2116": intan_rhs2116,
     "cortical-labs-cl": cortical_labs_cl,
+    "mcs-stg4000": mcs_stg4000,
+    "mcs-stg5": mcs_stg5,
+    "tdt-iz2": tdt_iz2,
 }
 
 
@@ -145,6 +208,17 @@ def override(device: Device, **fields) -> Device:
 def _round_half_up(x: float) -> int:
     """Round to the nearest whole number, halves up (Python's round() sends 4.5 to 4)."""
     return int(math.floor(x + 0.5 + 1e-9))
+
+
+def _is_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _pick_range(what: str, range_ua: object, ranges: Dict[float, float]) -> float:
+    for top, step in ranges.items():
+        if _is_number(range_ua) and math.isclose(range_ua, top, rel_tol=1e-9):
+            return step
+    raise ValueError(f"range_ua for {what} must be one of {', '.join(f'{r:g}' for r in ranges)} µA")
 
 
 def _positive(name: str, value: object) -> None:

@@ -11,6 +11,7 @@ Exit codes: 0 fitted with no errors (and no warnings with --strict), 1 errors
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import sys
 from typing import List, Optional
@@ -96,7 +97,8 @@ def _parser() -> argparse.ArgumentParser:
     q = sub.add_parser("quick", help="fit a pulse given as flags")
     q.add_argument("--device", choices=sorted(PRESETS), help="start from a preset")
     q.add_argument("--step-ua", type=float, help="intan-rhs2116: current step size")
-    q.add_argument("--sample-rate-hz", type=float, help="intan-rhs2116: host sampling rate")
+    q.add_argument("--sample-rate-hz", type=float, help="intan-rhs2116, tdt-iz2: sampling rate")
+    q.add_argument("--range-ua", type=float, help="mcs-stg4000, mcs-stg5, tdt-iz2: current range (max µA)")
     q.add_argument("--time-step-us", type=float)
     q.add_argument("--amplitude-step-ua", type=float)
     q.add_argument("--max-amplitude-ua", type=float)
@@ -122,10 +124,13 @@ def _quick_device(args: argparse.Namespace) -> Device:
     changes = dict(time_step_us=args.time_step_us, amplitude_step_ua=args.amplitude_step_ua,
                    max_amplitude_ua=args.max_amplitude_ua, max_charge_per_phase_nc=args.max_charge_per_phase_nc)
     if args.device:
-        options = {k: v for k, v in (("step_ua", args.step_ua), ("sample_rate_hz", args.sample_rate_hz))
-                   if v is not None}
-        if options and args.device != "intan-rhs2116":
-            raise ValueError("--step-ua and --sample-rate-hz only apply to intan-rhs2116")
+        given = (("step_ua", args.step_ua), ("sample_rate_hz", args.sample_rate_hz), ("range_ua", args.range_ua))
+        options = {k: v for k, v in given if v is not None}
+        accepted = inspect.signature(PRESETS[args.device]).parameters
+        wrong = [k for k in options if k not in accepted]
+        if wrong:
+            flags = ", ".join("--" + k.replace("_", "-") for k in wrong)
+            raise ValueError(f"{flags} does not apply to {args.device}")
         return override(preset(args.device, **options), **changes)
     if args.time_step_us is None:
         raise ValueError("give --device or at least --time-step-us")

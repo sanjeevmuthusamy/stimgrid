@@ -267,7 +267,8 @@ def _deliver(pulse: Pulse, device: Device, a1, w1: int, a2, w2: Optional[int], g
                 q2 = q1  # equal to the last bit, so no float noise in the net charge
         else:
             imbalance = abs(q1 - q2) / max(q1, q2)
-            imbalance = 0.0 if imbalance < 1e-12 else imbalance
+            if imbalance < 1e-12:
+                imbalance, q2 = 0.0, q1  # balanced within float precision: report a clean zero net charge
         ticks = w1 + gap + w2
     else:
         a2_ua, q2, imbalance, ticks = None, 0.0, 1.0, w1

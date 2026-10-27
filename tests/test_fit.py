@@ -5,7 +5,8 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-from stimgrid import Device, Pulse, Rates, cortical_labs_cl, fit, intan_rhs2116, preset  # noqa: E402
+from stimgrid import (Device, Pulse, Rates, cortical_labs_cl, fit, intan_rhs2116, mcs_stg4000,  # noqa: E402
+                      mcs_stg5, preset, tdt_iz2)
 
 
 def codes(report):
@@ -25,6 +26,38 @@ class DeviceTests(unittest.TestCase):
         d = cortical_labs_cl()
         self.assertEqual((d.time_step_us, d.max_amplitude_ua, d.max_charge_per_phase_nc), (20.0, 3.0, 3.0))
         self.assertTrue(d.continuous_amplitude)
+
+    def test_mcs_presets(self):
+        d = mcs_stg4000()
+        self.assertEqual((d.time_step_us, d.amplitude_step_ua, d.max_amplitude_ua, d.max_frequency_hz),
+                         (20.0, 0.2, 1600.0, 25000.0))
+        self.assertEqual(mcs_stg4000(16000).amplitude_step_ua, 2.0)
+        self.assertEqual(mcs_stg4000(16000).max_amplitude_steps, 8000)
+        for top, step in ((160, 0.1), (1600, 1.0), (16000, 10.0)):
+            d = mcs_stg5(top)
+            self.assertEqual((d.time_step_us, d.amplitude_step_ua, d.max_amplitude_ua), (5.0, step, top))
+        for bad in (lambda: mcs_stg4000(160), lambda: mcs_stg5(500), lambda: mcs_stg4000(True)):
+            with self.assertRaises(ValueError):
+                bad()
+
+    def test_tdt_preset(self):
+        d = tdt_iz2()
+        self.assertAlmostEqual(d.time_step_us, 40.96)
+        self.assertTrue(d.continuous_amplitude)
+        self.assertEqual(tdt_iz2(3000, 195312.5).max_amplitude_ua, 3000)
+        self.assertAlmostEqual(tdt_iz2(300, 195312.5).time_step_us, 5.12)
+        for bad in (lambda: tdt_iz2(1000), lambda: tdt_iz2(300, 400000), lambda: tdt_iz2(300, 0)):
+            with self.assertRaises(ValueError):
+                bad()
+
+    def test_every_preset_fits_a_pulse(self):
+        from stimgrid import PRESETS
+        for name in PRESETS:
+            r = fit(Pulse(2.5, 110, second_amplitude_ua=0.7, second_width_us=390), preset(name))
+            self.assertTrue(r.ok, name)
+            self.assertEqual(r.balanced.imbalance, 0, name)
+            self.assertEqual(r.balanced.net_charge_nc, 0, name)
+            self.assertTrue(preset(name).source.strip(), name)
 
     def test_round_half_up(self):
         d = Device("t", time_step_us=20, amplitude_step_ua=1)

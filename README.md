@@ -67,6 +67,25 @@ imbalance as balanced (the default is exact).
 |---|---|---|---|
 | `intan-rhs2116` | 1 / sample rate (`--sample-rate-hz`, default 30,000) | `--step-ua` of 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5 or 10 µA, up to 255 steps | Intan RHS2116 datasheet |
 | `cortical-labs-cl` | 20 µs | continuous (no step published), up to 3 µA, 3 nC per phase | Cortical Labs CL API docs (StimDesign) |
+| `mcs-stg4000` | 20 µs, up to 25 kHz | `--range-ua 1600`: 0.2 µA steps; `--range-ua 16000`: 2 µA steps | MCS STG 4002/4004/4008 datasheets |
+| `mcs-stg5` | 5 µs, up to 100 kHz | `--range-ua 160`: 0.1 µA; `1600`: 1 µA; `16000`: 10 µA steps | MCS STG5 brochure |
+| `tdt-iz2` | 1 / RZ sample rate (`--sample-rate-hz`, default 24,414.0625) | continuous (no step published); `--range-ua 300` (IZ2, IZ2M) or `3000` (IZ2H, IZ2MH) | TDT IZ2 manual, IZ2M/IZ2MH spec sheet |
+
+All presets are current mode. The MCS range is the model version you bought (STG4000) or the range you
+select (STG5). The STG4000 160 µA version is left out because its official datasheet could not be
+confirmed.
+
+**Not included yet**, because the vendor does not publish a current step or a timing step:
+
+| Device | Published | Missing |
+|---|---|---|
+| Axion Maestro Pro / Edge | ±250 µA, ±1.2 V, phase at least 100 µs | current step, time step |
+| MaxWell MaxOne / MaxTwo | 32 stimulation units, ±1.0 V | current range and step, time step |
+| Blackrock CereStim | phase 44–65,535 µs, 4 Hz–5 kHz, 100 µA steps (macro model) | micro model step, time step |
+| A-M Systems 4100 | 100 mA with 1 µA resolution, pulses from 1 µs | time step |
+
+If you have one of these, describe it with your own numbers (below), or send the values from your
+manual and they can become a preset.
 
 `stimgrid devices` prints each preset's source. The RHS2116 has no pulse timers; the host sets every
 edge, so its timing grid depends on your host software. Any other stimulator can be described by its
@@ -99,8 +118,9 @@ stimgrid fit examples/intan_asymmetric.json --format json
 cat request.json | stimgrid fit - --format pulse
 ```
 
-A preset can also take any device field to override it, for example
-`{"preset": "intan-rhs2116", "step_ua": 0.1, "max_amplitude_ua": 10}`. Invalid input names the exact
+A preset takes its options (`step_ua`, `sample_rate_hz` or `range_ua`, as in the table) and any device
+field to override, for example `{"preset": "intan-rhs2116", "step_ua": 0.1, "max_amplitude_ua": 10}` or
+`{"preset": "mcs-stg5", "range_ua": 160}`. Invalid input names the exact
 place, for example `pulse: width_us must be a positive number`.
 
 `--format pulse` prints only the best pulse, in the common shape (`amplitude_ua`, `width_us`,

@@ -33,6 +33,10 @@ class LoaderTests(unittest.TestCase):
         _, device, _, _ = from_dict({**BASE, "device": {"preset": "intan-rhs2116", "step_ua": 0.1,
                                                         "max_amplitude_ua": 10}})
         self.assertEqual(device.max_amplitude_ua, 10)
+        _, device, _, _ = from_dict({**BASE, "device": {"preset": "mcs-stg5", "range_ua": 160}})
+        self.assertEqual(device.amplitude_step_ua, 0.1)
+        _, device, _, _ = from_dict({**BASE, "device": {"preset": "tdt-iz2", "sample_rate_hz": 48828.125}})
+        self.assertAlmostEqual(device.time_step_us, 20.48)
         _, device, _, options = from_dict({**BASE, "device": {"name": "mine", "time_step_us": 5},
                                            "max_imbalance": 0.01, "keep_first": True})
         self.assertTrue(device.continuous_amplitude)
@@ -49,6 +53,8 @@ class LoaderTests(unittest.TestCase):
         self.error({**BASE, "device": {"preset": "intan-rhs2116", "step_ua": 0.3}}, "device: the RHS2116 step size")
         self.error({**BASE, "device": {"preset": "intan-rhs2116", "step_ua": "big"}}, "device.step_ua: must be a number")
         self.error({**BASE, "device": {"time_step_us": 5}}, "device: give a 'preset'")
+        self.error({**BASE, "device": {"preset": "mcs-stg4000", "range_ua": 160}}, "device: range_ua for the STG4000")
+        self.error({**BASE, "device": {"preset": "mcs-stg4000", "step_ua": 1}}, "device: unknown field(s) step_ua")
         self.error({**BASE, "stimgrid": 2}, "stimgrid: must be 1")
         self.error({**BASE, "max_imbalance": 2}, "max_imbalance: must be a number")
         d = copy.deepcopy(BASE)
@@ -58,7 +64,7 @@ class LoaderTests(unittest.TestCase):
 
 class CliTests(unittest.TestCase):
     def test_examples(self):
-        for name in ("intan_asymmetric.json", "cl_asymmetric.json", "custom_device.json"):
+        for name in sorted(n for n in os.listdir(EXAMPLES) if n.endswith(".json")):
             out = run("fit", os.path.join(EXAMPLES, name))
             self.assertEqual(out.returncode, 0, name + out.stderr)
             self.assertIn("result: OK", out.stdout)
@@ -89,6 +95,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(run("quick", "--device", "cortical-labs-cl", "--step-ua", "1", "--amplitude-ua", "1",
                              "--width-us", "100").returncode, 2)
         self.assertEqual(run("fit").returncode, 2)
+        wrong = run("quick", "--device", "mcs-stg5", "--step-ua", "1", "--amplitude-ua", "1", "--width-us", "100")
+        self.assertEqual(wrong.returncode, 2)
+        self.assertIn("--step-ua does not apply to mcs-stg5", wrong.stderr)
+        ok = run("quick", "--device", "mcs-stg5", "--range-ua", "160", "--amplitude-ua", "7.3", "--width-us", "117",
+                 "--second-amplitude-ua", "1.9", "--second-width-us", "450", "--format", "pulse")
+        self.assertEqual(ok.returncode, 0, ok.stderr)
 
     def test_stdin_and_quick(self):
         out = run("fit", "-", "--format", "pulse", stdin=json.dumps(BASE))
