@@ -117,7 +117,10 @@ def intan_rhs2116(step_ua: float = 1.0, sample_rate_hz: float = 30000.0) -> Devi
         amplitude_step_ua=step_ua,
         max_amplitude_ua=255 * step_ua,
         source=INTAN_SOURCE,
-        note="Timing grid assumes edges on sample boundaries; check your host software.",
+        note="Timing grid assumes edges on sample boundaries. This matches Intan RHX 3.5.2, which sends each "
+             "phase as the nearest whole number of samples and current steps (halves up). Its dialog rounds "
+             "from a truncated step (33.333 µs at 30 kS/s), so values within about 0.01 µs of a half-sample "
+             "can land one sample higher there. Check other host software.",
     )
 
 

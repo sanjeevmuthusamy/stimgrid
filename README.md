@@ -120,6 +120,22 @@ WARNING SG203 the balanced pulse changes charge per phase by -15.7%
 Simple rounding would leave 0.087 nC behind on every pulse. stimgrid lists exactly balanced pulses
 instead, closest to your plan first, and warns when the grid forces charge per phase to move.
 
+### Checked against Intan RHX
+
+The `intan-rhs2116` preset was compared with the source code of Intan RHX 3.5.2, Intan's own
+acquisition and stimulation software. RHX uses a time step of 1 / sample rate and a current step equal
+to the chosen step size, and it sends each phase as the nearest whole number of samples and current
+steps, with halves rounded up. That is the same rule stimgrid uses.
+
+The one difference is in RHX's stimulation dialog, which rounds typed values from a step shortened to
+three decimals (33.333 µs at 30,000 samples/s). Across 300,000 test values, 42 landed one sample
+apart, all at 30,000 samples/s and all within about 0.01 µs of a half-sample. For example, 383.33 µs
+gives 11 samples (366.67 µs) in stimgrid and 12 samples (400 µs) in RHX. At 20,000 and 25,000
+samples/s the two agreed on every value. If you type widths into RHX, use the `rounded` or `balanced`
+widths stimgrid prints; they are whole samples, so RHX keeps them as they are.
+
+This is a comparison with RHX's source code, not a measurement on hardware.
+
 ## How it works
 
 1. **Rounded.** Each amplitude, phase width and gap is rounded (halves up) to the device's steps and
@@ -189,7 +205,8 @@ If you have one of these, describe it with your own numbers (below), or send the
 manual and they can become a preset.
 
 `stimgrid devices` prints each preset's source. The RHS2116 has no pulse timers; the host sets every
-edge, so its timing grid depends on your host software. Any other stimulator can be described by its
+edge, so its timing grid depends on your host software (Intan RHX matches it; see
+[Checked against Intan RHX](#checked-against-intan-rhx)). Any other stimulator can be described by its
 own numbers:
 
 ```bash
