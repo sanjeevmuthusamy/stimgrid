@@ -274,7 +274,7 @@ print(report.balanced.as_pulse(), report.balanced.imbalance)
 If you use stimgrid in published work, please cite it. GitHub's "Cite this repository" button gives the
 reference from `CITATION.cff`:
 
-> Muthusamy S. stimgrid (version 0.1.0) [Computer software]. https://github.com/sanjeevmuthusamy/stimgrid
+> Muthusamy S. stimgrid (version 0.2.0) [Computer software]. https://github.com/sanjeevmuthusamy/stimgrid
 
 ## Tests
 

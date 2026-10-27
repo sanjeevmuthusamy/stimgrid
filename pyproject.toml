@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stimgrid"
-version = "0.1.0"
+version = "0.2.0"
 description = "Fit stimulation pulses to what a stimulator can actually produce, and find the nearest exactly charge-balanced pulse."
 readme = "README.md"
 license = { text = "MIT" }

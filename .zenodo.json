@@ -1,0 +1,8 @@
+{
+  "title": "stimgrid: charge-balanced stimulation pulses for real stimulators",
+  "description": "Fits planned electrical stimulation pulses to a stimulator's real current and timing steps, reports what is actually delivered, and finds the nearest exactly charge-balanced pulse on the device grid. Presets for the Intan RHS2116, Multi Channel Systems STG4000 and STG5, Tucker-Davis Technologies IZ2 and Cortical Labs CL. Research use only.",
+  "upload_type": "software",
+  "creators": [{"name": "Muthusamy, Sanjeev"}],
+  "license": "MIT",
+  "keywords": ["neuroscience", "electrophysiology", "neurostimulation", "electrical stimulation", "microstimulation", "charge balance", "biphasic pulse", "multi-electrode array", "MEA", "neural interface", "stimulation safety"]
+}

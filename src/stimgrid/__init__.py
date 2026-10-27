@@ -9,7 +9,7 @@ from .devices import PRESETS, Device, cortical_labs_cl, intan_rhs2116, mcs_stg40
 from .fit import Delivered, FitReport, Issue, Pulse, RateFit, Rates, fit
 from .loader import InputError, from_dict, load
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = [
     "PRESETS", "Delivered", "Device", "FitReport", "InputError", "Issue", "Pulse", "RateFit", "Rates",
     "cortical_labs_cl", "fit", "from_dict", "intan_rhs2116", "load", "mcs_stg4000", "mcs_stg5", "preset",
