@@ -8,18 +8,91 @@ rate of 130 Hz may also become 129.87 Hz.
 stimgrid shows what your device will actually deliver, and finds the nearest pulse on the device's grid
 whose two phases carry exactly equal charge. Pure Python, no dependencies.
 
+For electrical neurostimulation and microstimulation on multi-electrode arrays (MEAs), microelectrodes
+and neural interfaces, with presets for the Intan RHS2116, Multi Channel Systems STG4000 and STG5,
+Tucker-Davis Technologies IZ2 and Cortical Labs CL, and support for any other current-controlled
+stimulator from its current and timing steps.
+
 **Research use only.** stimgrid works from the resolution you give it (or a preset's published
 figures). Check the result on your own hardware and settings.
 
 ## Install
 
+Requires Python 3.9 or newer, and nothing else.
+
+```bash
+pip install git+https://github.com/sanjeevmuthusamy/stimgrid
+```
+
+Or from a downloaded copy, inside the `stimgrid` folder:
+
 ```bash
 pip install .
 ```
 
-Requires Python 3.9 or newer.
+This gives you the `stimgrid` command. You can also run it without installing, from the folder, as
+`PYTHONPATH=src python -m stimgrid ...`.
 
-## Example
+## Quick start
+
+1. **Find your device.** `stimgrid devices` lists the built-in presets and where their figures come
+   from. If yours is not there, give its own steps instead (see [Devices](#devices)).
+2. **Check your pulse.** Give the first phase, the second phase and the rate:
+
+   ```bash
+   stimgrid quick --device mcs-stg4000 --amplitude-ua 7.3 --width-us 117 \
+     --second-amplitude-ua 1.9 --second-width-us 450 --frequency-hz 130
+   ```
+
+3. **Read the result** (see [Reading the output](#reading-the-output)). Use the `balanced` pulse, or one
+   of the options, in your stimulation software.
+4. **Save it for later or for a lab mate** as a [request file](#request-files), and rerun it with
+   `stimgrid fit my_pulse.json`.
+
+Leave out `--second-amplitude-ua` and `--second-width-us` for a symmetric pulse; the second phase then
+copies the first.
+
+## Reading the output
+
+For the quick start command above:
+
+```
+device: mcs-stg4000 (1.6 mA version): 20 µs time steps, 0.2 µA steps, max 1600 µA
+  plan      7.3 µA x 117 µs | gap 0 µs | 1.9 µA x 450 µs
+  rounded   7.4 µA x 120 µs | gap 0 µs | 2 µA x 460 µs
+            charge 0.888 nC (+3.97% vs plan), net -0.032 nC, imbalance 3.4783%
+  balanced  7.2 µA x 120 µs | gap 0 µs | 1.8 µA x 480 µs
+            charge 0.864 nC (+1.16% vs plan), net 0 nC, imbalance 0.0000%
+  option 1  7 µA x 120 µs | gap 0 µs | 2 µA x 420 µs
+            charge 0.84 nC (-1.65% vs plan), net 0 nC, imbalance 0.0000%
+  ...
+  rate      frequency_hz 130 Hz -> 129.87 Hz (385 steps per period, -0.100%)
+
+WARNING SG201 simple rounding leaves the pulse unbalanced (imbalance 3.4783%, net -0.032 nC per pulse)
+
+best pulse: {"amplitude_ua": 7.2, "width_us": 120, "second_amplitude_ua": 1.8, "second_width_us": 480}
+result: OK
+```
+
+| Line | Meaning |
+|---|---|
+| `device` | The grid being used: time step, current step and maximum current |
+| `plan` | The pulse you asked for: first phase, gap, second phase |
+| `rounded` | What the device delivers if you type your plan in as it is |
+| `balanced` | The closest pulse whose two phases carry exactly equal charge. **Use this one** |
+| `option 1-3` | Other exactly balanced pulses, next closest first |
+| `charge` | Charge in the first phase, and how far it moved from your plan |
+| `net` | Charge left on the electrode by every pulse; 0 means balanced |
+| `imbalance` | The difference between the two phases' charges, as a share of the larger one |
+| `rate` | The rate you asked for, and the rate the device's clock really gives |
+| `WARNING` / `ERROR` | Findings, explained in [Findings](#findings) |
+| `best pulse` | The pulse to use, in a form you can paste into a file or program |
+| `result` | `OK`, or `ERROR` if the pulse breaks a device limit or cannot be balanced |
+
+Here the planned pulse would leave 0.032 nC on the electrode with every pulse; the balanced one leaves
+none and keeps charge per phase within 1.2% of the plan.
+
+## Another example: Intan RHS2116
 
 An asymmetric pulse on an Intan RHS2116 with 0.1 µA steps, driven at 30,000 samples/s:
 
@@ -58,8 +131,34 @@ instead, closest to your plan first, and warns when the grid forces charge per p
 4. **Rates.** Each rate is rounded to a whole number of time steps per period, and the delivered rate is
    reported.
 
-Options: `--keep-first` balances with the second phase only; `--max-imbalance 0.001` accepts a 0.1%
-imbalance as balanced (the default is exact).
+## Command options
+
+`stimgrid quick` takes the pulse as flags. Amplitudes are in µA, times in µs, rates in Hz.
+
+| Flag | Meaning |
+|---|---|
+| `--device NAME` | A preset from `stimgrid devices` |
+| `--step-ua`, `--sample-rate-hz`, `--range-ua` | Preset settings (see [Devices](#devices)) |
+| `--time-step-us`, `--amplitude-step-ua` | Your own device's steps, without a preset (or to override one) |
+| `--max-amplitude-ua`, `--max-charge-per-phase-nc` | Your own device's limits |
+| `--amplitude-ua`, `--width-us` | First phase (required) |
+| `--second-amplitude-ua`, `--second-width-us` | Second phase (defaults to the same as the first) |
+| `--gap-us` | Gap between the phases |
+| `--monophasic` | One phase only |
+| `--frequency-hz`, `--intra-burst-hz`, `--burst-rate-hz` | Rates to check against the time grid |
+| `--keep-first` | Keep the rounded first phase as it is; balance with the second phase only |
+| `--max-imbalance 0.001` | Accept up to 0.1% imbalance as balanced (the default is exact) |
+
+Both `quick` and `fit` also take:
+
+| Flag | Meaning |
+|---|---|
+| `--format text` | Readable report (the default) |
+| `--format json` | The full report as JSON, for scripts |
+| `--format pulse` | Only the best pulse as JSON |
+| `--strict` | Treat warnings as failures (exit code 1), for automated checks |
+
+`stimgrid --help` and `stimgrid quick --help` list them too.
 
 ## Devices
 
