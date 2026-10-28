@@ -375,3 +375,10 @@ python -m unittest discover -s tests
 ## Licence
 
 MIT. See `LICENSE`.
+
+## Trademarks
+
+Intan, RHX, Multi Channel Systems, MC_Stimulus, Tucker-Davis Technologies, Synapse, Cortical Labs and
+other product names are trademarks of their owners. They are used only to say which devices and
+software stimgrid works with. stimgrid is an independent project, not affiliated with or endorsed by
+any of these companies.
