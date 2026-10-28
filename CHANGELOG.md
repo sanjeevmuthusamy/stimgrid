@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Export: `--export intan-rhx` writes an Intan RHX stimulation-settings file, and `--export mcs-ascii`
+  writes an MC_Stimulus II / III ASCII import file for MCS STG4000 and STG5. Options `--out`, `--use`,
+  `--channels`, `--pulses` and `--first-phase`; `stimgrid.export()` from Python.
+- The Intan preset note and the README describe the comparison with Intan RHX's source code.
+
 ## 0.2.0
 
 - New device presets: `mcs-stg4000` (1.6 mA and 16 mA versions), `mcs-stg5` (three ranges) and

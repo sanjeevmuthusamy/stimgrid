@@ -4,6 +4,9 @@
   stimgrid quick ...      fit a pulse given as flags
   stimgrid devices        list the built-in device presets
 
+fit and quick take --export intan-rhx|mcs-ascii --out FILE to write the pulse in a
+file the stimulator's software can load.
+
 Exit codes: 0 fitted with no errors (and no warnings with --strict), 1 errors
 (or warnings with --strict), 2 bad input or usage, 3 internal error.
 """
@@ -18,6 +21,7 @@ from typing import List, Optional
 
 from . import __version__
 from .devices import PRESETS, Device, override, preset
+from .formats import FORMATS, ExportError, export
 from .fit import Delivered, FitReport, Pulse, Rates, fit
 from .loader import InputError, load
 
@@ -79,6 +83,27 @@ def _emit(report: FitReport, fmt: str, strict: bool) -> int:
     return EXIT_ISSUES if failed else EXIT_OK
 
 
+def _export(report: FitReport, device: Device, args: argparse.Namespace) -> int:
+    if not args.out:
+        raise InputError("--export needs --out FILE (or --out - to print it)")
+    if not report.ok:
+        print(render(report))
+        print("stimgrid: nothing exported: the fit has errors", file=sys.stderr)
+        return EXIT_ISSUES
+    channels = [c for c in args.channels.split(",") if c.strip()] if args.channels else None
+    text = export(report, device, args.export, use=args.use, pulses=args.pulses, channels=channels,
+                  negative_first=args.first_phase == "negative")
+    if args.out == "-":
+        sys.stdout.write(text)
+        failed = args.strict and bool(report.issues)
+        return EXIT_ISSUES if failed else EXIT_OK
+    with open(args.out, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+    code = _emit(report, args.format, args.strict)
+    print(f"stimgrid: wrote {args.export} file {args.out}", file=sys.stderr)
+    return code
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="stimgrid", description="Fit stimulation pulses to what a stimulator can "
                                      "actually produce, and find the nearest exactly charge-balanced pulse.")
@@ -89,6 +114,14 @@ def _parser() -> argparse.ArgumentParser:
         p.add_argument("--format", choices=("text", "json", "pulse"), default="text",
                        help="pulse prints only the best pulse as JSON")
         p.add_argument("--strict", action="store_true", help="treat warnings as failures (exit code 1)")
+        e = p.add_argument_group("export")
+        e.add_argument("--export", choices=FORMATS, help="write the pulse for the stimulator's own software")
+        e.add_argument("--out", help="file to write ('-' prints it instead of the report)")
+        e.add_argument("--use", default="best", help="best (default), rounded, balanced or option-N")
+        e.add_argument("--channels", help="comma-separated: RHX names such as A-000,A-001, or MCS numbers such as 1,2")
+        e.add_argument("--pulses", type=int, default=1, help="pulses in the train (needs a rate when above 1)")
+        e.add_argument("--first-phase", choices=("negative", "positive"), default="negative",
+                       help="sign of the first phase (default negative)")
 
     p_fit = sub.add_parser("fit", help="fit the pulse in a request file ('-' reads stdin)")
     p_fit.add_argument("file")
@@ -164,8 +197,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             report = fit(pulse, device, rates, **options)
         except ValueError as exc:
             raise InputError(str(exc)) from None
+        if args.export:
+            return _export(report, device, args)
         return _emit(report, args.format, args.strict)
-    except (InputError, OSError) as exc:
+    except (InputError, ExportError, OSError) as exc:
         print(f"stimgrid: {exc}", file=sys.stderr)
         return EXIT_INPUT
     except Exception as exc:  # noqa: BLE001 - report, don't crash with a traceback

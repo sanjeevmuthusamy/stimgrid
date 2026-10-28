@@ -47,7 +47,8 @@ This gives you the `stimgrid` command. You can also run it without installing, f
    ```
 
 3. **Read the result** (see [Reading the output](#reading-the-output)). Use the `balanced` pulse, or one
-   of the options, in your stimulation software.
+   of the options, in your stimulation software, or [export it](#export-to-your-stimulation-software)
+   as a file that Intan RHX or MCS MC_Stimulus can load.
 4. **Save it for later or for a lab mate** as a [request file](#request-files), and rerun it with
    `stimgrid fit my_pulse.json`.
 
@@ -178,6 +179,63 @@ Both `quick` and `fit` also take:
 
 `stimgrid --help` and `stimgrid quick --help` list them too.
 
+## Export to your stimulation software
+
+Instead of typing the fitted pulse into your stimulation software, `--export` writes it as a file that
+software can load. It works with both `quick` and `fit`:
+
+```bash
+stimgrid fit examples/intan_asymmetric.json --export intan-rhx --out stim.xml --channels A-000,A-001 --pulses 10
+stimgrid fit examples/mcs_stg4000_asymmetric.json --export mcs-ascii --out pulse.txt --pulses 100
+```
+
+The report still prints as usual, and the file is written next to it. With `--out -` only the file
+contents are printed. Nothing is exported if the fit has errors.
+
+| Flag | Meaning |
+|---|---|
+| `--export intan-rhx` | Intan RHX stimulation settings (`.xml`), for the RHS Stim/Record Controller |
+| `--export mcs-ascii` | MC_Stimulus II (STG4000) or MC_Stimulus III (STG5) ASCII import, current mode |
+| `--out FILE` | Where to write it (required; `-` prints it) |
+| `--use best` | Which pulse: `best` (the balanced one; the default), `rounded`, `balanced` or `option-1` to `option-3` |
+| `--channels` | RHX channel names such as `A-000,B-015` (default `A-000`), or MCS channel numbers such as `1,2` (default `1`) |
+| `--pulses N` | Pulses in the train (default 1). Above 1 it needs `--frequency-hz` (or `--intra-burst-hz`) |
+| `--first-phase negative` | Sign of the first phase: `negative` (the default) or `positive` |
+
+**Intan RHX.** Load the file with *File > Load Stimulation Settings* (not *Load Settings*, which expects
+a full RHX settings file and warns that no signal groups were found). It sets, for each listed channel:
+stimulation on, the shape (biphasic, or biphasic with interphase delay when there is a gap), the
+polarity, both phase durations and amplitudes, and for a train the number of pulses and the train
+period. Trigger, amp settle and charge recovery are left out, so the values already set in RHX stay.
+Other channels are not touched.
+
+- The file names the sample rate and step size it was fitted for. RHX ignores every stimulation setting
+  in the file, with only a warning, if these differ from the running system, so use the same
+  `--sample-rate-hz` (20,000, 25,000 or 30,000) and `--step-ua` as in RHX.
+- Durations are written in µs to six decimals. RHX converts them to the nearest whole sample, which is
+  the sample count stimgrid fitted.
+- stimgrid will not write what RHX would reject: phases or gaps over 5,000 µs, more than 256 pulses, or a
+  train period shorter than the pulse.
+
+**MCS MC_Stimulus.** Import the file in MC_Stimulus II or III. Each pulse is written as rows of current
+(µA) and duration (µs): the first phase, the gap if there is one, the second phase, then zero current
+for the rest of the period when a rate is given. Every pulse in the train is written out, because the
+import format has no repeat count.
+
+- Importing overwrites the open worksheet, and channels that are not in the file come out empty. Save
+  your current setup first.
+- The import takes times in multiples of 20 µs on both the STG4000 and the STG5, although the STG5
+  itself has a 5 µs time step. If an STG5 pulse is not on 20 µs steps, stimgrid says so; fit it again
+  with `--time-step-us 20`.
+- The manuals do not say which sign is cathodic on your electrode. `--first-phase` sets the sign of
+  the first phase; check the waveform preview in MC_Stimulus.
+
+Check the loaded values in the vendor software before stimulating. The file formats were written from
+the vendors' published descriptions. An `intan-rhx` file for the Intan example (10 pulses at 40 Hz) was
+loaded in the RHX 3.5.2 RHS demo at 30,000 samples/s and 0.1 µA steps, and RHX showed the exported
+values exactly (7.2 µA × 100 µs, 1.8 µA × 400 µs, cathodic first, 10 pulses, 25 ms period) and
+reported the charge as balanced. No `mcs-ascii` file has been loaded in MC_Stimulus yet.
+
 ## Devices
 
 | Preset | Time step | Amplitude | Source |
@@ -278,6 +336,17 @@ from stimgrid import Pulse, Rates, fit, intan_rhs2116
 report = fit(Pulse(7.3, 117, second_amplitude_ua=1.9, second_width_us=450),
              intan_rhs2116(step_ua=0.1, sample_rate_hz=30000), Rates(frequency_hz=40))
 print(report.balanced.as_pulse(), report.balanced.imbalance)
+```
+
+To export from Python:
+
+```python
+from stimgrid import export
+
+device = intan_rhs2116(step_ua=0.1, sample_rate_hz=30000)
+report = fit(Pulse(7.3, 117, second_amplitude_ua=1.9, second_width_us=450), device, Rates(frequency_hz=40))
+with open("stim.xml", "w") as fh:
+    fh.write(export(report, device, "intan-rhx", channels=["A-000"], pulses=10))
 ```
 
 ## Limits of this tool
