@@ -10,6 +10,7 @@
   request file), `fit`, `quick` and `check` report the charge density of the larger phase and its
   Shannon k value, and warn (SG501) above `--k-limit` (default 1.75). From Python: `Electrode` and
   `fit(..., electrode=...)`.
+- A GitHub issue form for requesting a new device preset, linked from the README.
 
 ## 0.3.0
 

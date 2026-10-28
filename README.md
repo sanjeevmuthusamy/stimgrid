@@ -343,8 +343,9 @@ confirmed.
 | Blackrock CereStim | phase 44–65,535 µs, 4 Hz–5 kHz, 100 µA steps (macro model) | micro model step, time step |
 | A-M Systems 4100 | 100 mA with 1 µA resolution, pulses from 1 µs | time step |
 
-If you have one of these, describe it with your own numbers (below), or send the values from your
-manual and they can become a preset.
+If you have one of these, describe it with your own numbers (below). To have it added as a preset,
+[request a device](https://github.com/sanjeevmuthusamy/stimgrid/issues/new?template=device-request.yml)
+with the values from its manual or datasheet; the same form works for any stimulator not listed.
 
 `stimgrid devices` prints each preset's source. The RHS2116 has no pulse timers; the host sets every
 edge, so its timing grid depends on your host software (Intan RHX matches it; see

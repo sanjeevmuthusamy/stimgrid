@@ -1,0 +1,103 @@
+name: Add my stimulator
+description: Ask for a device preset, with the values from its manual or datasheet.
+title: "Device: "
+labels: ["device"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping stimgrid cover more hardware. A preset needs the device's **current step** and
+        **time step** from a published source (a datasheet, manual or spec sheet) or from your own
+        measurements. Leave a field empty if you don't know it.
+
+        Please check `stimgrid devices` first, and only share documents you are free to share publicly.
+
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      description: Maker, model and version.
+      placeholder: "e.g. Example Instruments StimBox 2, 1 mA version"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Output mode
+      options:
+        - Current
+        - Voltage
+        - Both
+    validations:
+      required: true
+
+  - type: input
+    id: range
+    attributes:
+      label: Current range(s)
+      description: The largest current for each range or model version, in µA.
+      placeholder: "e.g. ±1000 µA, or 100 / 1000 µA (selectable)"
+
+  - type: input
+    id: amplitude-step
+    attributes:
+      label: Current step
+      description: The smallest change in current for each range, in µA. Write "continuous" if the source says so.
+      placeholder: "e.g. 0.5 µA on the 1000 µA range"
+    validations:
+      required: true
+
+  - type: input
+    id: time-step
+    attributes:
+      label: Time step
+      description: The timing resolution in µs, or the sample rate that sets it.
+      placeholder: "e.g. 10 µs, or 50,000 samples/s"
+    validations:
+      required: true
+
+  - type: input
+    id: phase
+    attributes:
+      label: Shortest and longest phase
+      placeholder: "e.g. 20 µs to 10,000 µs"
+
+  - type: input
+    id: limits
+    attributes:
+      label: Other limits
+      description: Highest pulse rate, most charge per phase, or anything else the source gives.
+      placeholder: "e.g. up to 10 kHz, 100 nC per phase"
+
+  - type: input
+    id: software
+    attributes:
+      label: Host software
+      description: The program you use to set up stimulation, and its version, if it matters for timing.
+      placeholder: "e.g. StimBox Control 4.1"
+
+  - type: textarea
+    id: source
+    attributes:
+      label: Source
+      description: A link to the datasheet or manual, with the page or table. For your own measurements, say how you measured.
+    validations:
+      required: true
+
+  - type: textarea
+    id: try
+    attributes:
+      label: Your numbers in stimgrid (optional)
+      description: If you already described the device with `stimgrid quick --time-step-us ... --amplitude-step-ua ...`, paste the command and anything that looked wrong.
+      render: shell
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Before you send
+      options:
+        - label: These values come from a public source or my own measurements.
+          required: true
+        - label: I'm happy for them to be added to stimgrid under its MIT licence, citing the source.
+          required: true
