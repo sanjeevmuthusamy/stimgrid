@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stimgrid"
-version = "0.3.0"
+version = "0.4.0"
 description = "Fit stimulation pulses to what a stimulator can actually produce, and find the nearest exactly charge-balanced pulse."
 readme = "README.md"
 license = { text = "MIT" }
@@ -13,7 +13,7 @@ authors = [{ name = "Sanjeev Muthusamy" }]
 dependencies = []
 keywords = [
   "neuroscience", "electrophysiology", "neurostimulation", "electrical stimulation", "microstimulation",
-  "charge balance", "charge-balanced", "biphasic pulse", "asymmetric pulse", "stimulation safety",
+  "charge balance", "charge-balanced", "charge density", "Shannon criterion", "biphasic pulse", "asymmetric pulse", "stimulation safety",
   "multi-electrode array", "MEA", "microelectrode", "neural interface", "brain-computer interface",
   "DAC quantization", "Intan", "RHS2116", "Multi Channel Systems", "STG4000", "STG5",
   "Tucker-Davis Technologies", "IZ2", "Cortical Labs",

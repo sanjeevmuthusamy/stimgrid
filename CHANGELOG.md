@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 - New `stimgrid check FILE`: reads an Intan RHX stimulation-settings file or an MC_Stimulus ASCII file
   and reports, per channel, the delivered pulse, its charge balance, the net charge over the whole
@@ -16,6 +16,7 @@
   simply rounded one (`--use rounded`). New finding SG601 for a burst longer than its period. From
   Python: `load_protocol`, `fit_protocol`, `Protocol` and `Step`.
 - A GitHub issue form for requesting a new device preset, linked from the README.
+- README: a trademark and no-affiliation note.
 
 ## 0.3.0
 
