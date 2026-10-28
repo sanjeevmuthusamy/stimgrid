@@ -5,6 +5,7 @@ really delivered, and finds the nearest exactly charge-balanced pulse.
 For research use; check results on your own hardware.
 """
 
+from .check import CheckError, CheckReport, check_file, check_text
 from .devices import PRESETS, Device, cortical_labs_cl, intan_rhs2116, mcs_stg4000, mcs_stg5, preset, tdt_iz2
 from .formats import ExportError, export
 from .fit import Delivered, FitReport, Issue, Pulse, RateFit, Rates, fit
@@ -12,7 +13,7 @@ from .loader import InputError, from_dict, load
 
 __version__ = "0.3.0"
 __all__ = [
-    "PRESETS", "Delivered", "Device", "ExportError", "FitReport", "InputError", "Issue", "Pulse", "RateFit",
-    "Rates", "cortical_labs_cl", "export", "fit", "from_dict", "intan_rhs2116", "load", "mcs_stg4000",
-    "mcs_stg5", "preset", "tdt_iz2", "__version__",
+    "PRESETS", "CheckError", "CheckReport", "Delivered", "Device", "ExportError", "FitReport", "InputError",
+    "Issue", "Pulse", "RateFit", "Rates", "check_file", "check_text", "cortical_labs_cl", "export", "fit",
+    "from_dict", "intan_rhs2116", "load", "mcs_stg4000", "mcs_stg5", "preset", "tdt_iz2", "__version__",
 ]

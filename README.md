@@ -48,7 +48,8 @@ This gives you the `stimgrid` command. You can also run it without installing, f
 
 3. **Read the result** (see [Reading the output](#reading-the-output)). Use the `balanced` pulse, or one
    of the options, in your stimulation software, or [export it](#export-to-your-stimulation-software)
-   as a file that Intan RHX or MCS MC_Stimulus can load.
+   as a file that Intan RHX or MCS MC_Stimulus can load. Already have such a file?
+   [`stimgrid check`](#check-an-existing-file) tells you whether it is balanced.
 4. **Save it for later or for a lab mate** as a [request file](#request-files), and rerun it with
    `stimgrid fit my_pulse.json`.
 
@@ -236,6 +237,59 @@ loaded in the RHX 3.5.2 RHS demo at 30,000 samples/s and 0.1 µA steps, and RHX 
 values exactly (7.2 µA × 100 µs, 1.8 µA × 400 µs, cathodic first, 10 pulses, 25 ms period) and
 reported the charge as balanced. No `mcs-ascii` file has been loaded in MC_Stimulus yet.
 
+## Check an existing file
+
+`stimgrid check` reads a stimulation file you already have and reports, channel by channel, what the
+stimulator will deliver and whether each pulse is charge-balanced. It reads the same two formats that
+export writes: Intan RHX stimulation settings (`.xml`, saved with *File > Save Stimulation Settings*) and
+MC_Stimulus II / III ASCII files (format 4, current mode).
+
+```bash
+stimgrid check stim.xml
+```
+
+```
+file: stim.xml: Intan RHX, 30000 samples/s, 0.1 µA steps
+A-000:
+  in file   7.3 µA x 117 µs | gap 0 µs | 1.9 µA x 450 µs  (100 pulses every 25000 µs)
+  delivered 7.3 µA x 133.333 µs | gap 0 µs | 1.9 µA x 466.667 µs
+            charge 0.97333 nC (+13.96% vs file), net 0.08667 nC, imbalance 8.9041%
+  balanced  7.2 µA x 100 µs | gap 0 µs | 1.8 µA x 400 µs
+            charge 0.72 nC (-15.70% vs file), net 0 nC, imbalance 0.0000%
+  WARNING SG106 width_us 117 becomes 133.333 after rounding (+14.0%)
+  WARNING SG203 the balanced pulse changes charge per phase by -15.7%
+  net charge over the whole channel: 8.667 nC (NOT balanced)
+A-001: off: stimulation is off
+
+summary: 2 channel(s): 1 checked (1 not balanced), 1 off, 0 skipped
+result: NOT OK
+```
+
+- **in file** is what the file says; **delivered** is that pulse rounded to the device's steps, the way
+  RHX and MC_Stimulus do it (nearest step, halves up). Here RHX turns 117 µs into 4 samples at
+  30,000 samples/s, and the pulse leaves 0.087 nC behind every time, 8.7 nC over the train.
+- **balanced** is the nearest exactly balanced pulse, shown only when the delivered pulse is not balanced.
+- Channels that are off, use a shape stimgrid does not check (such as triphasic), or leave values out of
+  the file (RHX then keeps what it already has) are listed but not checked.
+- It also flags what would stop the file working: in RHX, a phase over 5,000 µs, more than 256 pulses,
+  or a train period shorter than the pulse (RHX then skips the channel with only a warning); in
+  MC_Stimulus, times that are not multiples of 20 µs.
+
+The exit code is 0 when every checked channel is balanced and nothing would stop the file working,
+and 1 otherwise, so `stimgrid check` can run in a script before each experiment.
+
+| Flag | Meaning |
+|---|---|
+| `--format json` | The full result as JSON |
+| `--max-imbalance 0.001` | Accept up to 0.1% imbalance as balanced |
+| `--strict` | Also fail on warnings |
+| `--sample-rate-hz`, `--step-ua` | Intan RHX: only needed if the file leaves them out |
+| `--device mcs-stg4000` or `mcs-stg5`, `--range-ua` | MC_Stimulus: your stimulator and range (default: STG4000 1.6 mA for an MC_Stimulus II file, STG5 1.6 mA for III) |
+
+In an MC_Stimulus file, stimgrid splits each channel into pulses: a phase, then an opposite-sign phase
+straight after it or after one zero-current row (the gap). Identical pulses are counted together. A
+phase with no opposite phase after it is reported as monophasic, and so not balanced.
+
 ## Devices
 
 | Preset | Time step | Amplitude | Source |
@@ -318,13 +372,17 @@ place, for example `pulse: width_us must be a positive number`.
 | SG301 | warning | A rate changes by more than 0.1% on whole periods |
 | SG303 | error | The pulse is longer than one period at that rate |
 | SG304 | error | A rate is above the device's maximum |
+| SG401 | error | `check`: a value in an RHX file is outside what RHX accepts |
+| SG402 | error | `check`: a phase has zero duration or amplitude |
+| SG403 | error | `check`: an RHX train period is shorter than the pulse, so RHX skips the channel |
+| SG404 | error | `check`: an MC_Stimulus time is not a multiple of 20 µs, or not above zero |
 
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
-| 0 | Fitted with no errors (and no warnings, with `--strict`) |
-| 1 | Errors (or warnings, with `--strict`) |
+| 0 | Fitted with no errors (and no warnings, with `--strict`); for `check`, every checked channel balanced |
+| 1 | Errors (or warnings, with `--strict`); for `check`, also any channel not balanced |
 | 2 | Bad input or usage |
 | 3 | Internal error |
 
@@ -347,6 +405,16 @@ device = intan_rhs2116(step_ua=0.1, sample_rate_hz=30000)
 report = fit(Pulse(7.3, 117, second_amplitude_ua=1.9, second_width_us=450), device, Rates(frequency_hz=40))
 with open("stim.xml", "w") as fh:
     fh.write(export(report, device, "intan-rhx", channels=["A-000"], pulses=10))
+```
+
+To check a file from Python:
+
+```python
+from stimgrid import check_file
+
+result = check_file("stim.xml")
+for channel in result.unbalanced:
+    print(channel.channel, channel.net_charge_nc)
 ```
 
 ## Limits of this tool

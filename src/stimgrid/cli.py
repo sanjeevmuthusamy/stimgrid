@@ -2,6 +2,7 @@
 
   stimgrid fit FILE|-     fit the pulse in a request file (or stdin)
   stimgrid quick ...      fit a pulse given as flags
+  stimgrid check FILE     check an existing Intan RHX or MC_Stimulus file
   stimgrid devices        list the built-in device presets
 
 fit and quick take --export intan-rhx|mcs-ascii --out FILE to write the pulse in a
@@ -20,6 +21,7 @@ import sys
 from typing import List, Optional
 
 from . import __version__
+from .check import KINDS, CheckError, CheckReport, check_file
 from .devices import PRESETS, Device, override, preset
 from .formats import FORMATS, ExportError, export
 from .fit import Delivered, FitReport, Pulse, Rates, fit
@@ -33,10 +35,10 @@ def _f(x: Optional[float], digits: int = 6) -> str:
     return "-" if x is None else f"{x:.{digits}g}"
 
 
-def _row(label: str, d: Delivered) -> str:
+def _row(label: str, d: Delivered, ref: str = "plan") -> str:
     second = f"{_f(d.second_amplitude_ua)} µA x {_f(d.second_width_us)} µs" if d.biphasic else "(monophasic)"
     return (f"  {label:<9} {_f(d.amplitude_ua)} µA x {_f(d.width_us)} µs | gap {_f(d.gap_us)} µs | {second}\n"
-            f"  {'':<9} charge {_f(d.first_charge_nc, 5)} nC ({d.charge_change:+.2%} vs plan), "
+            f"  {'':<9} charge {_f(d.first_charge_nc, 5)} nC ({d.charge_change:+.2%} vs {ref}), "
             f"net {_f(d.net_charge_nc, 4)} nC, imbalance {d.imbalance:.4%}")
 
 
@@ -104,6 +106,51 @@ def _export(report: FitReport, device: Device, args: argparse.Namespace) -> int:
     return code
 
 
+def render_check(report: CheckReport, path: str) -> str:
+    lines = [f"file: {path}: {report.description}"]
+    for ch in report.channels:
+        if ch.status != "checked":
+            lines.append(f"{'channel ' if ch.channel.isdigit() else ''}{ch.channel}: {ch.status}: {ch.note}")
+            continue
+        lines.append(f"{'channel ' if ch.channel.isdigit() else ''}{ch.channel}:")
+        for p in ch.pulses:
+            t = p.report.target
+            second = (f"{_f(t['second_amplitude_ua'])} µA x {_f(t['second_width_us'])} µs" if t["biphasic"]
+                      else "(monophasic)")
+            times = f"{p.count} pulse{'s' if p.count != 1 else ''}"
+            if p.period_us:
+                times += f" every {_f(p.period_us)} µs"
+            first = f"{_f(t['amplitude_ua'])} µA x {_f(t['width_us'])} µs"
+            lines.append(f"  in file   {first} | gap {_f(t['gap_us'])} µs | {second}  ({times})")
+            lines.append(_row("delivered", p.report.rounded, "file"))
+            if not p.balanced and p.report.balanced is not None:
+                lines.append(_row("balanced", p.report.balanced, "file"))
+            for i in p.report.issues:
+                if i.code != "SG201":
+                    lines.append(f"  {i.severity.upper():<7} {i.code} {i.message}")
+        lines.append(f"  net charge over the whole channel: {_f(ch.net_charge_nc, 4)} nC "
+                     f"({'balanced' if ch.balanced else 'NOT balanced'})")
+        for i in ch.issues:
+            lines.append(f"  {i.severity.upper():<7} {i.code} {i.message}")
+    counts = {s: sum(c.status == s for c in report.channels) for s in ("checked", "off", "skipped")}
+    lines += ["", f"summary: {len(report.channels)} channel(s): {counts['checked']} checked "
+                  f"({len(report.unbalanced)} not balanced), {counts['off']} off, {counts['skipped']} skipped",
+              f"result: {'OK' if report.ok else 'NOT OK'}", NOTE]
+    return "\n".join(lines)
+
+
+def _emit_check(report: CheckReport, path: str, fmt: str, strict: bool) -> int:
+    if fmt == "json":
+        data = report.to_dict()
+        data.update({"tool": "stimgrid", "tool_version": __version__, "file": path, "note": NOTE})
+        print(json.dumps(data, indent=2, ensure_ascii=False, allow_nan=False))
+    else:
+        print(render_check(report, path))
+    warnings = any(i.severity == "warning" for c in report.channels
+                   for i in c.issues + [j for p in c.pulses for j in p.report.issues if j.code != "SG201"])
+    return EXIT_ISSUES if (not report.ok or (strict and warnings)) else EXIT_OK
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="stimgrid", description="Fit stimulation pulses to what a stimulator can "
                                      "actually produce, and find the nearest exactly charge-balanced pulse.")
@@ -149,6 +196,18 @@ def _parser() -> argparse.ArgumentParser:
     q.add_argument("--keep-first", action="store_true", help="balance with the second phase only")
     output(q)
 
+    c = sub.add_parser("check", help="check an existing Intan RHX or MC_Stimulus ASCII file")
+    c.add_argument("file")
+    c.add_argument("--kind", choices=KINDS, help="the file type (detected from the file by default)")
+    c.add_argument("--sample-rate-hz", type=float, help="Intan RHX: when the file does not give it")
+    c.add_argument("--step-ua", type=float, help="Intan RHX: when the file does not give it")
+    c.add_argument("--device", choices=("mcs-stg4000", "mcs-stg5"),
+                   help="MC_Stimulus: the stimulator (default: STG4000 for II files, STG5 for III)")
+    c.add_argument("--range-ua", type=float, help="MC_Stimulus: the stimulator's current range (max µA)")
+    c.add_argument("--max-imbalance", type=float, default=0.0)
+    c.add_argument("--format", choices=("text", "json"), default="text")
+    c.add_argument("--strict", action="store_true", help="treat warnings as failures (exit code 1)")
+
     sub.add_parser("devices", help="list the built-in device presets")
     return parser
 
@@ -181,6 +240,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                 if d.note:
                     print(f"  note: {d.note}")
             return EXIT_OK
+        if args.command == "check":
+            report = check_file(args.file, args.kind, sample_rate_hz=args.sample_rate_hz, step_ua=args.step_ua,
+                                device=args.device, range_ua=args.range_ua, max_imbalance=args.max_imbalance)
+            return _emit_check(report, args.file, args.format, args.strict)
         if args.command == "fit":
             pulse, device, rates, options = load(args.file)
         else:
@@ -200,7 +263,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.export:
             return _export(report, device, args)
         return _emit(report, args.format, args.strict)
-    except (InputError, ExportError, OSError) as exc:
+    except (InputError, ExportError, CheckError, OSError, UnicodeDecodeError) as exc:
         print(f"stimgrid: {exc}", file=sys.stderr)
         return EXIT_INPUT
     except Exception as exc:  # noqa: BLE001 - report, don't crash with a traceback

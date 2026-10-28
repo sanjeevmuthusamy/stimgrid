@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- New `stimgrid check FILE`: reads an Intan RHX stimulation-settings file or an MC_Stimulus ASCII file
+  and reports, per channel, the delivered pulse, its charge balance, the net charge over the whole
+  channel and the nearest balanced pulse. It also flags values RHX or MC_Stimulus would not accept.
+  Exit code 1 when a channel is not balanced. New findings SG401 to SG404.
+
 ## 0.3.0
 
 - Export: `--export intan-rhx` writes an Intan RHX stimulation-settings file, and `--export mcs-ascii`
