@@ -6,11 +6,14 @@
   "pulse": {"amplitude_ua": 7.3, "width_us": 117, "second_amplitude_ua": 1.9, "second_width_us": 450},
   "rates": {"frequency_hz": 40},
   "max_imbalance": 0,
-  "keep_first": false
+  "keep_first": false,
+  "electrode": {"diameter_um": 15}
 }
 
 A device is a preset (with its options, plus any field to override) or a full description:
 {"name": "my stimulator", "time_step_us": 10, "amplitude_step_ua": 0.5, "max_amplitude_ua": 100}
+
+electrode is optional: area_um2 or diameter_um, and k_limit (default 1.75).
 """
 
 from __future__ import annotations
@@ -24,11 +27,12 @@ from pathlib import Path
 from typing import Any, Dict, Tuple, Union
 
 from .devices import PRESETS, Device, override, preset
+from .electrode import Electrode
 from .fit import Pulse, Rates
 
 FORMAT_VERSION = 1
 DEVICE_FIELDS = tuple(f.name for f in fields(Device))
-TOP_FIELDS = ("stimgrid", "device", "pulse", "rates", "max_imbalance", "keep_first", "search_steps")
+TOP_FIELDS = ("stimgrid", "device", "pulse", "rates", "max_imbalance", "keep_first", "search_steps", "electrode")
 
 
 class InputError(ValueError):
@@ -62,6 +66,13 @@ def from_dict(data: Any) -> Tuple[Pulse, Device, Rates, Dict[str, Any]]:
         if not (isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= 20):
             raise InputError("search_steps: must be a whole number from 0 to 20")
         options["search_steps"] = v
+    if "electrode" in data:
+        spec = data["electrode"]
+        _object(spec, "electrode")
+        for k, v in spec.items():
+            if not _number(v):
+                raise InputError(f"electrode.{k}: must be a number, got {json.dumps(v)}")
+        options["electrode"] = _build(Electrode, spec, "electrode")
     return pulse, device, rates, options
 
 

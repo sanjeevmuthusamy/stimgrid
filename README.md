@@ -290,6 +290,36 @@ In an MC_Stimulus file, stimgrid splits each channel into pulses: a phase, then 
 straight after it or after one zero-current row (the gap). Identical pulses are counted together. A
 phase with no opposite phase after it is reported as monophasic, and so not balanced.
 
+## Charge density and Shannon k
+
+Give the electrode's size and `fit`, `quick` and `check` also report the charge density of the larger
+phase and its Shannon *k* value, `k = log10(Q) + log10(Q / A)`, with *Q* the charge per phase in µC and
+*A* the electrode's geometric area in cm² ([Shannon, 1992](https://doi.org/10.1109/10.126616)).
+
+```bash
+stimgrid quick --device mcs-stg4000 --amplitude-ua 100 --width-us 200 --electrode-diameter-um 30
+```
+
+```
+  electrode 706.858 µm²: 20 nC per phase, 2829 µC/cm², Shannon k 1.753 (limit 1.75 allows 19.94 nC)
+
+WARNING SG501 Shannon k 1.753 is above 1.75 (20 nC per phase, 2829 µC/cm² on 706.858 µm²); at most 19.94 nC per phase stays within it
+```
+
+| Flag | Meaning |
+|---|---|
+| `--electrode-diameter-um` | Diameter of a disc electrode |
+| `--electrode-area-um2` | Or its geometric area |
+| `--k-limit` | Warn above this *k* (default 1.75) |
+
+- `fit` and `quick` report the best pulse; `check` reports the pulse the file delivers.
+- Going over the limit is a warning (SG501), so the exit code stays 0 unless you add `--strict`.
+- A request file can carry it too: `"electrode": {"diameter_um": 30, "k_limit": 1.75}`. Flags on
+  `stimgrid fit` replace the file's values.
+- Shannon's line was fitted to damage data from macroelectrodes. For small microelectrodes it is not a
+  reliable guide, and the limits that apply depend on the electrode material and the tissue. Treat *k*
+  as one input to your own judgement, not as a safety limit.
+
 ## Devices
 
 | Preset | Time step | Amplitude | Source |
@@ -338,9 +368,12 @@ Fields: `time_step_us` (required), `amplitude_step_ua` (leave out for continuous
   "pulse": {"amplitude_ua": 7.3, "width_us": 117, "second_amplitude_ua": 1.9, "second_width_us": 450},
   "rates": {"frequency_hz": 40},
   "max_imbalance": 0,
-  "keep_first": false
+  "keep_first": false,
+  "electrode": {"diameter_um": 15}
 }
 ```
+
+`electrode` is optional (see [Charge density and Shannon k](#charge-density-and-shannon-k)).
 
 ```bash
 stimgrid fit examples/intan_asymmetric.json
@@ -376,6 +409,7 @@ place, for example `pulse: width_us must be a positive number`.
 | SG402 | error | `check`: a phase has zero duration or amplitude |
 | SG403 | error | `check`: an RHX train period is shorter than the pulse, so RHX skips the channel |
 | SG404 | error | `check`: an MC_Stimulus time is not a multiple of 20 µs, or not above zero |
+| SG501 | warning | The Shannon *k* value is above the limit (only with an electrode size) |
 
 ## Exit codes
 
@@ -415,6 +449,16 @@ from stimgrid import check_file
 result = check_file("stim.xml")
 for channel in result.unbalanced:
     print(channel.channel, channel.net_charge_nc)
+```
+
+With an electrode:
+
+```python
+from stimgrid import Electrode, mcs_stg4000
+
+report = fit(Pulse(100, 200), mcs_stg4000(), electrode=Electrode(diameter_um=30))
+print(report.density.density_uc_cm2, report.density.shannon_k, report.density.max_charge_nc)
+result = check_file("stim.xml", electrode=Electrode(area_um2=2000))
 ```
 
 ## Limits of this tool

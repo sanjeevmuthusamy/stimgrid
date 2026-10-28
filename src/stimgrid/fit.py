@@ -20,6 +20,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Iterable, List, Optional, Tuple
 
 from .devices import Device, _positive, _round_half_up
+from .electrode import Density, Electrode, charge_density
 
 MAX_SECOND_WIDTH_CANDIDATES = 4001
 _EPS = 1e-9
@@ -140,6 +141,7 @@ class FitReport:
     rates: List[RateFit]
     issues: List[Issue]
     max_imbalance: float
+    density: Optional[Density] = None  # set when an electrode is given
 
     @property
     def ok(self) -> bool:
@@ -157,12 +159,13 @@ class FitReport:
 
 
 def fit(pulse: Pulse, device: Device, rates: Optional[Rates] = None, max_imbalance: float = 0.0,
-        keep_first: bool = False, search_steps: int = 2) -> FitReport:
+        keep_first: bool = False, search_steps: int = 2, electrode: Optional[Electrode] = None) -> FitReport:
     """Round a pulse to a device's grid, and find the nearest exactly balanced version.
 
     max_imbalance: the imbalance accepted as balanced (0 means exact).
     keep_first: keep the first phase as rounded and balance with the second phase only.
     search_steps: how many grid steps the first phase may move either way while searching.
+    electrode: report charge density and the Shannon k value of the best pulse on this electrode.
     """
     if not (isinstance(max_imbalance, (int, float)) and 0 <= max_imbalance < 1):
         raise ValueError("max_imbalance must be at least 0 and below 1")
@@ -215,9 +218,26 @@ def fit(pulse: Pulse, device: Device, rates: Optional[Rates] = None, max_imbalan
             issues.append(Issue("SG104", "error", f"charge per phase {q:.4g} nC is above the device's "
                                                   f"{device.max_charge_per_phase_nc:g} nC"))
     rate_fits = _rates(rates, device, best, issues)
+    report = FitReport(asdict(device), asdict(pulse), rounded, balanced, alternatives, rate_fits, issues,
+                       max_imbalance)
+    if electrode is not None:
+        assess_density(report, best, electrode)
     issues.sort(key=lambda i: (i.severity != "error", i.code))
-    return FitReport(asdict(device), asdict(pulse), rounded, balanced, alternatives, rate_fits, issues,
-                     max_imbalance)
+    return report
+
+
+def assess_density(report: FitReport, pulse: Delivered, electrode: Electrode) -> Density:
+    """Set report.density for this pulse on the electrode, and its SG501 warning when k is over the limit."""
+    d = charge_density(pulse.first_charge_nc, pulse.second_charge_nc, electrode)
+    report.density = d
+    report.issues[:] = [i for i in report.issues if i.code != "SG501"]
+    if not d.within_limit:
+        report.issues.append(Issue("SG501", "warning",
+                                   f"Shannon k {d.shannon_k:.3f} is above {d.k_limit:g} ({d.charge_nc:.4g} nC per "
+                                   f"phase, {d.density_uc_cm2:.4g} µC/cm² on {d.area_um2:.6g} µm²); at most "
+                                   f"{d.max_charge_nc:.4g} nC per phase stays within it"))
+        report.issues.sort(key=lambda i: (i.severity != "error", i.code))
+    return d
 
 
 # --- grid rounding -----------------------------------------------------------------------------------------------

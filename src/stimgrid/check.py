@@ -17,7 +17,8 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from .devices import INTAN_RHS2116_STEPS_UA, Device, intan_rhs2116, mcs_stg4000, mcs_stg5, override
-from .fit import FitReport, Issue, Pulse, Rates, fit
+from .electrode import Electrode
+from .fit import FitReport, Issue, Pulse, Rates, assess_density, fit
 from .formats import INTAN_RHX_MAX_PHASE_US, INTAN_RHX_MAX_PULSES, INTAN_RHX_SAMPLE_RATES, MCS_TIME_GRID_US
 
 KINDS = ("intan-rhx", "mcs-ascii")
@@ -117,17 +118,24 @@ def detect(text: str) -> str:
 
 def check_text(text: str, kind: Optional[str] = None, *, sample_rate_hz: Optional[float] = None,
                step_ua: Optional[float] = None, device: Optional[str] = None, range_ua: Optional[float] = None,
-               max_imbalance: float = 0.0) -> CheckReport:
+               max_imbalance: float = 0.0, electrode: Optional[Electrode] = None) -> CheckReport:
+    """Check a file's text. With an electrode, each delivered pulse also gets its charge density and k."""
     kind = kind or detect(text)
     if kind == "intan-rhx":
         if device is not None or range_ua is not None:
             raise CheckError("--device and --range-ua apply to MC_Stimulus files only")
-        return _check_rhx(text, sample_rate_hz, step_ua, max_imbalance)
-    if kind == "mcs-ascii":
+        report = _check_rhx(text, sample_rate_hz, step_ua, max_imbalance)
+    elif kind == "mcs-ascii":
         if sample_rate_hz is not None or step_ua is not None:
             raise CheckError("--sample-rate-hz and --step-ua apply to Intan RHX files only")
-        return _check_mcs(text, device, range_ua, max_imbalance)
-    raise CheckError(f"unknown file kind {kind!r}; known: {', '.join(KINDS)}")
+        report = _check_mcs(text, device, range_ua, max_imbalance)
+    else:
+        raise CheckError(f"unknown file kind {kind!r}; known: {', '.join(KINDS)}")
+    if electrode is not None:
+        for ch in report.checked:
+            for p in ch.pulses:
+                assess_density(p.report, p.report.rounded, electrode)  # what the file delivers
+    return report
 
 
 def check_file(path: str, kind: Optional[str] = None, **options) -> CheckReport:

@@ -6,6 +6,10 @@
   and reports, per channel, the delivered pulse, its charge balance, the net charge over the whole
   channel and the nearest balanced pulse. It also flags values RHX or MC_Stimulus would not accept.
   Exit code 1 when a channel is not balanced. New findings SG401 to SG404.
+- Charge density: with `--electrode-diameter-um` or `--electrode-area-um2` (or `"electrode"` in a
+  request file), `fit`, `quick` and `check` report the charge density of the larger phase and its
+  Shannon k value, and warn (SG501) above `--k-limit` (default 1.75). From Python: `Electrode` and
+  `fit(..., electrode=...)`.
 
 ## 0.3.0
 
