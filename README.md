@@ -290,6 +290,76 @@ In an MC_Stimulus file, stimgrid splits each channel into pulses: a phase, then 
 straight after it or after one zero-current row (the gap). Identical pulses are counted together. A
 phase with no opposite phase after it is reported as monophasic, and so not balanced.
 
+## Whole protocols
+
+A request file can describe a whole protocol instead of one pulse: a list of steps, each a single
+pulse, a train, a set of bursts or a rest. `stimgrid fit` fits every step's pulse and adds what only
+shows across steps: how long each step really takes once its rates fall on whole time steps, how many
+pulses each channel gets, and the charge per phase and net charge over the whole protocol.
+
+```json
+{
+  "stimgrid": 1,
+  "device": {"preset": "mcs-stg4000"},
+  "protocol": [
+    {"name": "train", "pulse": {"amplitude_ua": 7.3, "width_us": 117, "second_amplitude_ua": 1.9, "second_width_us": 450},
+     "pulses": 1300, "frequency_hz": 130, "channels": [1, 2]},
+    {"name": "pause", "rest_s": 10},
+    {"name": "theta", "pulse": {"amplitude_ua": 20, "width_us": 100},
+     "bursts": 10, "pulses": 4, "intra_burst_hz": 100, "burst_rate_hz": 5, "channels": [1]}
+  ],
+  "repeat": 3
+}
+```
+
+```bash
+stimgrid fit examples/mcs_stg4000_protocol.json
+```
+
+```
+device: mcs-stg4000 (1.6 mA version): 20 µs time steps, 0.2 µA steps
+protocol: 3 step(s), run 3 times, using the best pulse of each step
+
+step 1 train: 1,300 pulses at 130 Hz on channels 1, 2
+  plan      7.3 µA x 117 µs | gap 0 µs | 1.9 µA x 450 µs
+  using     7.2 µA x 120 µs | gap 0 µs | 1.8 µA x 480 µs
+            charge 0.864 nC (+1.16% vs plan), net 0 nC, imbalance 0.0000%
+  rate      frequency_hz 130 Hz -> 129.87 Hz (-0.100%)
+  time      10 s planned, 10.01 s delivered (+0.100%)
+  charge    1.123 µC per phase over 1,300 pulses, net 0 nC (balanced)
+...
+
+time: 1 min 6 s planned, 1 min 6.03 s delivered (+0.045%)
+channel 1: 4,020 pulses, 3.61 µC per phase, net 0 nC (balanced)
+channel 2: 3,900 pulses, 3.37 µC per phase, net 0 nC (balanced)
+result: OK
+```
+
+Here 130 Hz on the STG4000's 20 µs grid becomes 129.87 Hz, so the 10 s train takes 10.01 s, and the
+whole protocol runs 30 ms longer than planned.
+
+| Step field | Meaning |
+|---|---|
+| `pulse` | The pulse, as in a single-pulse request |
+| `pulses`, `frequency_hz` | A train: how many pulses, at what rate (the rate is needed for more than one) |
+| `bursts`, `pulses`, `intra_burst_hz`, `burst_rate_hz` | Bursts: how many, pulses in each, the rate inside a burst and bursts per second |
+| `rest_s` | A rest, in seconds (a step of its own, without a pulse) |
+| `channels` | Channel names or numbers the step uses, for the per-channel totals (optional) |
+| `name` | A label for the report (optional) |
+
+At the top level, `repeat` runs the whole list more than once, and `use` (or `--use`) picks the pulse each
+step uses: `best` (the balanced pulse, the default) or `rounded` (the planned pulse simply rounded,
+to see what it would leave behind). `max_imbalance`, `keep_first`, `search_steps` and `electrode` work as
+in a single-pulse request.
+
+- A train's time is pulses × period, its last period included; a burst step's is bursts × burst period.
+  Rests are taken as given.
+- A burst that does not fit in one burst period is an error (SG601).
+- The exit code is 0 when no step has an error and every pulse used is balanced, so
+  `stimgrid fit protocol.json --use rounded` fails if simple rounding would leave charge behind.
+- `--format json` gives every step and total. `--format pulse` and `--export` work on one pulse only, so
+  they are not available for a protocol.
+
 ## Charge density and Shannon k
 
 Give the electrode's size and `fit`, `quick` and `check` also report the charge density of the larger
@@ -387,6 +457,9 @@ field to override, for example `{"preset": "intan-rhs2116", "step_ua": 0.1, "max
 `{"preset": "mcs-stg5", "range_ua": 160}`. Invalid input names the exact
 place, for example `pulse: width_us must be a positive number`.
 
+A request file with `protocol` instead of `pulse` describes a whole protocol; see
+[Whole protocols](#whole-protocols).
+
 `--format pulse` prints only the best pulse, in the common shape (`amplitude_ua`, `width_us`,
 `second_amplitude_ua`, `second_width_us`, `gap_us`), ready to paste into a protocol file or another tool.
 
@@ -411,6 +484,7 @@ place, for example `pulse: width_us must be a positive number`.
 | SG403 | error | `check`: an RHX train period is shorter than the pulse, so RHX skips the channel |
 | SG404 | error | `check`: an MC_Stimulus time is not a multiple of 20 µs, or not above zero |
 | SG501 | warning | The Shannon *k* value is above the limit (only with an electrode size) |
+| SG601 | error | Protocol: a burst is longer than one burst period |
 
 ## Exit codes
 
@@ -460,6 +534,16 @@ from stimgrid import Electrode, mcs_stg4000
 report = fit(Pulse(100, 200), mcs_stg4000(), electrode=Electrode(diameter_um=30))
 print(report.density.density_uc_cm2, report.density.shannon_k, report.density.max_charge_nc)
 result = check_file("stim.xml", electrode=Electrode(area_um2=2000))
+```
+
+A protocol:
+
+```python
+from stimgrid import load_protocol, fit_protocol
+
+protocol, device, options = load_protocol("examples/mcs_stg4000_protocol.json")
+report = fit_protocol(protocol, device, **options)
+print(report.delivered_us / 1e6, [(c.channel, c.pulses, c.net_charge_nc) for c in report.channels()])
 ```
 
 ## Limits of this tool

@@ -42,6 +42,9 @@ class InputError(ValueError):
 def from_dict(data: Any) -> Tuple[Pulse, Device, Rates, Dict[str, Any]]:
     """Returns the pulse, the device, the rates and the fit options."""
     _object(data, "request")
+    if "protocol" in data:
+        raise InputError("request: this is a protocol (it has 'protocol'); read it with load_protocol, "
+                         "or run it with stimgrid fit")
     _known(data, TOP_FIELDS, "request")
     if data.get("stimgrid") != FORMAT_VERSION:
         raise InputError(f"stimgrid: must be {FORMAT_VERSION} (the format version), got {data.get('stimgrid')!r}")
@@ -51,7 +54,12 @@ def from_dict(data: Any) -> Tuple[Pulse, Device, Rates, Dict[str, Any]]:
     device = device_from_dict(data["device"], "device")
     pulse = _build(Pulse, data["pulse"], "pulse")
     rates = _build(Rates, data.get("rates", {}), "rates")
-    options = {}
+    return pulse, device, rates, fit_options(data)
+
+
+def fit_options(data: Dict[str, Any]) -> Dict[str, Any]:
+    """The fit options a request may give: max_imbalance, keep_first, search_steps and electrode."""
+    options: Dict[str, Any] = {}
     if "max_imbalance" in data:
         v = data["max_imbalance"]
         if not (_number(v) and 0 <= v < 1):
@@ -73,7 +81,7 @@ def from_dict(data: Any) -> Tuple[Pulse, Device, Rates, Dict[str, Any]]:
             if not _number(v):
                 raise InputError(f"electrode.{k}: must be a number, got {json.dumps(v)}")
         options["electrode"] = _build(Electrode, spec, "electrode")
-    return pulse, device, rates, options
+    return options
 
 
 def device_from_dict(spec: Any, path: str = "device") -> Device:
@@ -99,15 +107,18 @@ def device_from_dict(spec: Any, path: str = "device") -> Device:
 
 def load(source: Union[str, Path]) -> Tuple[Pulse, Device, Rates, Dict[str, Any]]:
     """Read a request from a file path, or from stdin when source is '-'."""
+    return from_dict(read_json(source))
+
+
+def read_json(source: Union[str, Path]) -> Any:
+    """The JSON in a file, or in stdin when source is '-'."""
     try:
         if str(source) == "-":
-            data = json.load(sys.stdin)
-        else:
-            with open(source, encoding="utf-8") as fh:
-                data = json.load(fh)
+            return json.load(sys.stdin)
+        with open(source, encoding="utf-8") as fh:
+            return json.load(fh)
     except json.JSONDecodeError as exc:
         raise InputError(f"input: not valid JSON (line {exc.lineno}, column {exc.colno}: {exc.msg})") from None
-    return from_dict(data)
 
 
 def _build(cls, spec: Any, path: str):

@@ -1,6 +1,6 @@
 """Command line.
 
-  stimgrid fit FILE|-     fit the pulse in a request file (or stdin)
+  stimgrid fit FILE|-     fit the pulse, or the whole protocol, in a request file (or stdin)
   stimgrid quick ...      fit a pulse given as flags
   stimgrid check FILE     check an existing Intan RHX or MC_Stimulus file
   stimgrid devices        list the built-in device presets
@@ -29,7 +29,8 @@ from .devices import PRESETS, Device, override, preset
 from .electrode import Density, Electrode
 from .formats import FORMATS, ExportError, export
 from .fit import Delivered, FitReport, Pulse, Rates, fit
-from .loader import InputError, load
+from .loader import InputError, from_dict, read_json
+from .protocol import USES, ProtocolReport, fit_protocol, is_protocol, protocol_from_dict
 
 EXIT_OK, EXIT_ISSUES, EXIT_INPUT, EXIT_INTERNAL = 0, 1, 2, 3
 NOTE = "Values are what the device grid allows; check them on your own hardware. Research use only."
@@ -106,7 +107,7 @@ def _export(report: FitReport, device: Device, args: argparse.Namespace) -> int:
         print("stimgrid: nothing exported: the fit has errors", file=sys.stderr)
         return EXIT_ISSUES
     channels = [c for c in args.channels.split(",") if c.strip()] if args.channels else None
-    text = export(report, device, args.export, use=args.use, pulses=args.pulses, channels=channels,
+    text = export(report, device, args.export, use=args.use or "best", pulses=args.pulses, channels=channels,
                   negative_first=args.first_phase == "negative")
     if args.out == "-":
         sys.stdout.write(text)
@@ -117,6 +118,87 @@ def _export(report: FitReport, device: Device, args: argparse.Namespace) -> int:
     code = _emit(report, args.format, args.strict)
     print(f"stimgrid: wrote {args.export} file {args.out}", file=sys.stderr)
     return code
+
+
+def _seconds(us: float) -> str:
+    s = us / 1e6
+    if s < 60:
+        return f"{s:.6g} s"
+    m, rest = divmod(s, 60)
+    return f"{int(m)} min {rest:.6g} s" if m < 60 else f"{int(m // 60)} h {int(m % 60)} min {rest:.6g} s"
+
+
+def _describe(step) -> str:
+    if step.pulse is None:
+        return f"rest {_seconds(step.rest_s * 1e6)}"
+    n = f"{step.pulses:,} pulse{'s' if step.pulses != 1 else ''}"
+    if step.kind == "train":
+        text = n + (f" at {_f(step.frequency_hz)} Hz" if step.frequency_hz else "")
+    else:
+        text = f"{step.bursts:,} burst{'s' if step.bursts != 1 else ''} of {n}"
+        if step.intra_burst_hz:
+            text += f" at {_f(step.intra_burst_hz)} Hz"
+        if step.burst_rate_hz:
+            text += f", {_f(step.burst_rate_hz)} bursts/s"
+    if step.channels:
+        text += f" on channel{'s' if len(step.channels) > 1 else ''} {', '.join(step.channels)}"
+    return text
+
+
+def _change(planned: float, delivered: float) -> str:
+    return f"{(delivered - planned) / planned:+.3%}" if planned else "+0.000%"
+
+
+def render_protocol(report: ProtocolReport) -> str:
+    dev = report.device
+    amp = "continuous" if dev["amplitude_step_ua"] is None else f"{_f(dev['amplitude_step_ua'])} µA steps"
+    runs = f", run {report.repeat:,} times" if report.repeat > 1 else ""
+    lines = [f"device: {dev['name']}: {_f(dev['time_step_us'])} µs time steps, {amp}",
+             f"protocol: {len(report.steps)} step(s){runs}, using the {report.use} pulse of each step", ""]
+    for n, s in enumerate(report.steps, 1):
+        name = f" {s.step.name}" if s.step.name else ""
+        lines.append(f"step {n}{name}: {_describe(s.step)}")
+        if s.report is None:
+            continue
+        t = s.report.target
+        second = (f"{_f(t['second_amplitude_ua'] or t['amplitude_ua'])} µA x "
+                  f"{_f(t['second_width_us'] or t['width_us'])} µs" if t["biphasic"] else "(monophasic)")
+        lines.append(f"  plan      {_f(t['amplitude_ua'])} µA x {_f(t['width_us'])} µs | gap {_f(t['gap_us'])} µs "
+                     f"| {second}")
+        lines.append(_row("using", s.used))
+        for r in s.report.rates:
+            lines.append(f"  rate      {r.name} {_f(r.target_hz)} Hz -> {_f(r.delivered_hz)} Hz ({r.change:+.3%})")
+        lines.append(f"  time      {_seconds(s.planned_us)} planned, {_seconds(s.delivered_us)} delivered "
+                     f"({_change(s.planned_us, s.delivered_us)})")
+        lines.append(f"  charge    {_f(s.phase_charge_nc / 1e3, 4)} µC per phase over {s.count:,} pulses, "
+                     f"net {_f(s.net_charge_nc, 4)} nC ({'balanced' if s.balanced else 'NOT balanced'})")
+        lines += _density(s.report.density)
+        for i in s.all_issues:
+            lines.append(f"  {i.severity.upper():<7} {i.code} {i.message}")
+    lines += ["", f"time: {_seconds(report.planned_us)} planned, {_seconds(report.delivered_us)} delivered "
+                  f"({_change(report.planned_us, report.delivered_us)})"]
+    if not report.channels():
+        lines.append(f"all steps: {report.pulses:,} pulses, {_f(report.phase_charge_nc / 1e3, 4)} µC per phase, "
+                     f"net {_f(report.net_charge_nc, 4)} nC ({'balanced' if report.balanced else 'NOT balanced'})")
+    for c in report.channels():
+        label = f"channel {c.channel}" if c.channel.isdigit() else (c.channel or "steps with no channel")
+        lines.append(f"{label}: {c.pulses:,} pulses, {_f(c.phase_charge_nc / 1e3, 4)} µC per phase, "
+                     f"net {_f(c.net_charge_nc, 4)} nC ({'balanced' if c.balanced else 'NOT balanced'})")
+    lines += [f"result: {'OK' if report.ok else 'NOT OK'}", NOTE]
+    return "\n".join(lines)
+
+
+def _emit_protocol(report: ProtocolReport, fmt: str, strict: bool) -> int:
+    if fmt == "pulse":
+        raise InputError("--format pulse is for one pulse; a protocol has one per step (use --format json)")
+    if fmt == "json":
+        data = report.to_dict()
+        data.update({"tool": "stimgrid", "tool_version": __version__, "note": NOTE})
+        print(json.dumps(data, indent=2, ensure_ascii=False, allow_nan=False))
+    else:
+        print(render_protocol(report))
+    warnings = any(i.severity == "warning" for s in report.steps for i in s.all_issues)
+    return EXIT_ISSUES if (not report.ok or (strict and warnings)) else EXIT_OK
 
 
 def render_check(report: CheckReport, path: str) -> str:
@@ -184,7 +266,7 @@ def _parser() -> argparse.ArgumentParser:
         e = p.add_argument_group("export")
         e.add_argument("--export", choices=FORMATS, help="write the pulse for the stimulator's own software")
         e.add_argument("--out", help="file to write ('-' prints it instead of the report)")
-        e.add_argument("--use", default="best", help="best (default), rounded, balanced or option-N")
+        e.add_argument("--use", help="best (default), rounded, balanced or option-N; for a protocol, best or rounded")
         e.add_argument("--channels", help="comma-separated: RHX names such as A-000,A-001, or MCS numbers such as 1,2")
         e.add_argument("--pulses", type=int, default=1, help="pulses in the train (needs a rate when above 1)")
         e.add_argument("--first-phase", choices=("negative", "positive"), default="negative",
@@ -272,6 +354,22 @@ def _electrode(args: argparse.Namespace, given: Optional[Electrode] = None) -> O
         raise InputError(str(exc)) from None
 
 
+def _run_protocol(data, args: argparse.Namespace) -> int:
+    if args.export:
+        raise InputError("--export writes one pulse; fit a single step's pulse to export it")
+    protocol, device, options = protocol_from_dict(data)
+    options["electrode"] = _electrode(args, options.get("electrode"))
+    if args.use is not None:
+        if args.use not in USES:
+            raise InputError(f"--use for a protocol must be {' or '.join(USES)}")
+        options["use"] = args.use
+    try:
+        report = fit_protocol(protocol, device, **options)
+    except ValueError as exc:
+        raise InputError(str(exc)) from None
+    return _emit_protocol(report, args.format, args.strict)
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     args = _parser().parse_args(argv)  # usage errors exit with 2
     try:
@@ -289,7 +387,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                                 electrode=_electrode(args))
             return _emit_check(report, args.file, args.format, args.strict)
         if args.command == "fit":
-            pulse, device, rates, options = load(args.file)
+            data = read_json(args.file)
+            if is_protocol(data):
+                return _run_protocol(data, args)
+            pulse, device, rates, options = from_dict(data)
             options["electrode"] = _electrode(args, options.get("electrode"))
         else:
             try:

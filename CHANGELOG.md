@@ -10,6 +10,11 @@
   request file), `fit`, `quick` and `check` report the charge density of the larger phase and its
   Shannon k value, and warn (SG501) above `--k-limit` (default 1.75). From Python: `Electrode` and
   `fit(..., electrode=...)`.
+- Whole protocols: a request file with a `protocol` list of steps (single pulses, trains, bursts and
+  rests, with optional channels and `repeat`) runs with `stimgrid fit`. It reports each step's
+  delivered time and charge, and the totals per channel, using the balanced pulse (`--use best`) or the
+  simply rounded one (`--use rounded`). New finding SG601 for a burst longer than its period. From
+  Python: `load_protocol`, `fit_protocol`, `Protocol` and `Step`.
 - A GitHub issue form for requesting a new device preset, linked from the README.
 
 ## 0.3.0

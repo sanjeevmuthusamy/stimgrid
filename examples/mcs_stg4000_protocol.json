@@ -1,0 +1,12 @@
+{
+  "stimgrid": 1,
+  "device": {"preset": "mcs-stg4000"},
+  "protocol": [
+    {"name": "train", "pulse": {"amplitude_ua": 7.3, "width_us": 117, "second_amplitude_ua": 1.9, "second_width_us": 450},
+     "pulses": 1300, "frequency_hz": 130, "channels": [1, 2]},
+    {"name": "pause", "rest_s": 10},
+    {"name": "theta", "pulse": {"amplitude_ua": 20, "width_us": 100},
+     "bursts": 10, "pulses": 4, "intra_burst_hz": 100, "burst_rate_hz": 5, "channels": [1]}
+  ],
+  "repeat": 3
+}
