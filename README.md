@@ -362,7 +362,7 @@ with open("stim.xml", "w") as fh:
 If you use stimgrid in published work, please cite it. GitHub's "Cite this repository" button gives the
 reference from `CITATION.cff`:
 
-> Muthusamy S. stimgrid (version 0.2.0) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.23694989
+> Muthusamy S. stimgrid (version 0.3.0) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.23694989
 
 This DOI always resolves to the latest version; each release also has its own DOI on Zenodo.
 

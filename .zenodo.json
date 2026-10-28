@@ -1,6 +1,6 @@
 {
   "title": "stimgrid: charge-balanced stimulation pulses for real stimulators",
-  "description": "Fits planned electrical stimulation pulses to a stimulator's real current and timing steps, reports what is actually delivered, and finds the nearest exactly charge-balanced pulse on the device grid. Presets for the Intan RHS2116, Multi Channel Systems STG4000 and STG5, Tucker-Davis Technologies IZ2 and Cortical Labs CL. Research use only.",
+  "description": "Fits planned electrical stimulation pulses to a stimulator's real current and timing steps, reports what is actually delivered, and finds the nearest exactly charge-balanced pulse on the device grid. Presets for the Intan RHS2116, Multi Channel Systems STG4000 and STG5, Tucker-Davis Technologies IZ2 and Cortical Labs CL. Exports the fitted pulse as an Intan RHX stimulation-settings file or an MCS MC_Stimulus ASCII import file. Research use only.",
   "upload_type": "software",
   "creators": [{"name": "Muthusamy, Sanjeev"}],
   "license": "MIT",
