@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1
 
 - Contact: a README section, a contact email in the package and citation details, GitHub Discussions
   for questions, and an "Ask a question" link when opening an issue.
