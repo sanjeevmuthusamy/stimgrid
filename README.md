@@ -20,7 +20,7 @@ figures). Check the result on your own hardware and settings.
 
 ## Install
 
-Requires Python 3.9 or newer, and nothing else.
+Requires Python 3.10 or newer, and nothing else.
 
 ```bash
 pip install git+https://github.com/sanjeevmuthusamy/stimgrid

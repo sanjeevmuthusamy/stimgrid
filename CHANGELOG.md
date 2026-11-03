@@ -4,6 +4,11 @@
 
 - Contact: a README section, a contact email in the package and citation details, GitHub Discussions
   for questions, and an "Ask a question" link when opening an issue.
+- A GitHub issue form for reporting bugs.
+- Packaging: the licence is now given in the current standard form (`license = "MIT"`), which removes
+  the build warnings; the source package now includes the example files the tests use.
+- Python 3.10 or newer is now required. Python 3.9 reached its end of life in October 2025 and was not
+  being tested.
 
 ## 0.4.0
 

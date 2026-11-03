@@ -1,0 +1,60 @@
+name: Report a bug
+description: stimgrid gave a wrong result, crashed, or wrote a file your stimulation software would not load.
+title: "Bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. The details below let the problem be reproduced exactly.
+        For questions about how to use stimgrid, please use [Discussions](https://github.com/sanjeevmuthusamy/stimgrid/discussions) instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: stimgrid version
+      description: The output of `stimgrid --version`.
+      placeholder: "stimgrid 0.4.1"
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python and operating system
+      placeholder: "e.g. Python 3.12 on Windows 11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: What you ran
+      description: The command, or the Python code. If it reads a request or stimulation file, paste the file too (remove anything private).
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: What stimgrid printed
+      description: The full output, including any error.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: For example the value your stimulator or its software shows, or the datasheet value.
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Stimulator and software
+      description: If it matters, the device and the host software with its version.
+      placeholder: "e.g. Intan RHS Stim/Record Controller with Intan RHX 3.5.2"

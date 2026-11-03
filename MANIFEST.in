@@ -1,0 +1,2 @@
+# Files the tests need, so they also run from the source package
+recursive-include examples *.json
