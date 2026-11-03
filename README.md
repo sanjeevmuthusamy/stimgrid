@@ -554,6 +554,13 @@ print(report.delivered_us / 1e6, [(c.channel, c.pulses, c.net_charge_nc) for c i
 - Continuous amplitude means the device's real amplitude resolution is unknown; the reported amplitude
   may need rounding again on the hardware.
 
+## Contact
+
+- **Questions and ideas:** [GitHub Discussions](https://github.com/sanjeevmuthusamy/stimgrid/discussions)
+- **Bugs:** [GitHub Issues](https://github.com/sanjeevmuthusamy/stimgrid/issues)
+- **A stimulator to add:** [request a device](https://github.com/sanjeevmuthusamy/stimgrid/issues/new?template=device-request.yml)
+- **Anything else, or anything you'd rather not post publicly:** email sanjeevmuthusamy@bastionoid.com
+
 ## Citing
 
 If you use stimgrid in published work, please cite it. GitHub's "Cite this repository" button gives the

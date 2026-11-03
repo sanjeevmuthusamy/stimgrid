@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Contact: a README section, a contact email in the package and citation details, GitHub Discussions
+  for questions, and an "Ask a question" link when opening an issue.
+
 ## 0.4.0
 
 - New `stimgrid check FILE`: reads an Intan RHX stimulation-settings file or an MC_Stimulus ASCII file

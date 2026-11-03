@@ -9,6 +9,7 @@ abstract: >-
 authors:
   - family-names: "Muthusamy"
     given-names: "Sanjeev"
+    email: "sanjeevmuthusamy@bastionoid.com"
 version: "0.4.0"
 doi: "10.5281/zenodo.23694989"
 identifiers:
