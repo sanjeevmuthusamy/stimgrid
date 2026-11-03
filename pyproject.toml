@@ -39,6 +39,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/sanjeevmuthusamy/stimgrid"
+Website = "https://bastionoid.com"
 Issues = "https://github.com/sanjeevmuthusamy/stimgrid/issues"
 Discussions = "https://github.com/sanjeevmuthusamy/stimgrid/discussions"
 

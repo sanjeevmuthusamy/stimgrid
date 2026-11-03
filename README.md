@@ -560,6 +560,7 @@ print(report.delivered_us / 1e6, [(c.channel, c.pulses, c.net_charge_nc) for c i
 - **Bugs:** [GitHub Issues](https://github.com/sanjeevmuthusamy/stimgrid/issues)
 - **A stimulator to add:** [request a device](https://github.com/sanjeevmuthusamy/stimgrid/issues/new?template=device-request.yml)
 - **Anything else, or anything you'd rather not post publicly:** email sanjeevmuthusamy@bastionoid.com
+- **Website:** [bastionoid.com](https://bastionoid.com), where stimgrid is made alongside the Bastionoid platform
 
 ## Citing
 
