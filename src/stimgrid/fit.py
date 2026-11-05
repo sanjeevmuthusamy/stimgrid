@@ -127,7 +127,7 @@ class RateFit:
 @dataclass
 class Issue:
     code: str
-    severity: str  # "error" or "warning"
+    severity: str  # "error", "warning" or "note"
     message: str
 
 
@@ -198,6 +198,9 @@ def fit(pulse: Pulse, device: Device, rates: Optional[Rates] = None, max_imbalan
             issues.append(Issue("SG201", "warning",
                                 f"simple rounding leaves the pulse unbalanced (imbalance {rounded.imbalance:.4%}, "
                                 f"net {rounded.net_charge_nc:.4g} nC per pulse)"))
+            note = _substep_note(device, a1, w1, w2)
+            if note:
+                issues.append(note)
         ranked = _search(pulse, device, a1, w1, w2, gap, max_imbalance, keep_first, search_steps)
         if ranked:
             balanced, alternatives = ranked[0], ranked[1:4]
@@ -222,7 +225,7 @@ def fit(pulse: Pulse, device: Device, rates: Optional[Rates] = None, max_imbalan
                        max_imbalance)
     if electrode is not None:
         assess_density(report, best, electrode)
-    issues.sort(key=lambda i: (i.severity != "error", i.code))
+    issues.sort(key=_issue_order)
     return report
 
 
@@ -236,11 +239,36 @@ def assess_density(report: FitReport, pulse: Delivered, electrode: Electrode) ->
                                    f"Shannon k {d.shannon_k:.3f} is above {d.k_limit:g} ({d.charge_nc:.4g} nC per "
                                    f"phase, {d.density_uc_cm2:.4g} µC/cm² on {d.area_um2:.6g} µm²); at most "
                                    f"{d.max_charge_nc:.4g} nC per phase stays within it"))
-        report.issues.sort(key=lambda i: (i.severity != "error", i.code))
+        report.issues.sort(key=_issue_order)
     return d
 
 
 # --- grid rounding -----------------------------------------------------------------------------------------------
+
+def _issue_order(issue: Issue) -> Tuple[int, str]:
+    return {"error": 0, "warning": 1}.get(issue.severity, 2), issue.code
+
+
+def _substep_note(device: Device, a1: int, w1: int, w2: int) -> Optional[Issue]:
+    """Say which second-phase amplitude exact balance needs at the rounded widths, if the device can't give it."""
+    if device.continuous_amplitude:
+        return None
+    x = a1 * w1 / w2
+    top = device.max_amplitude_steps
+    whole = abs(x - round(x)) < 1e-9
+    if whole and x >= 1 and (top is None or x <= top):
+        return None  # a whole number of steps the device can give: the search finds it
+    step, tick = device.amplitude_step_ua, device.time_step_us
+    need = f"exact balance at the rounded widths ({w1 * tick:.6g} µs and {w2 * tick:.6g} µs) would need " \
+           f"{x * step:.4g} µA on the second phase"
+    if x < 1:
+        where = f"below one {step:g} µA step"
+    elif top is not None and x > top:
+        where = f"above the device's {device.ua(top):g} µA"
+    else:
+        where = f"between the {step:g} µA steps {device.ua(math.floor(x)):g} and {device.ua(math.ceil(x)):g} µA"
+    return Issue("SG204", "note", f"{need}, {where}")
+
 
 def _grid_amplitude(value: float, device: Device, name: str) -> Tuple[float, Optional[Issue]]:
     """Amplitude as steps (int) on a gridded device, or µA (float) on a continuous one."""

@@ -86,6 +86,10 @@ def render(report: FitReport) -> str:
     return "\n".join(lines)
 
 
+def _has_warnings(report: FitReport) -> bool:
+    return any(i.severity == "warning" for i in report.issues)
+
+
 def _emit(report: FitReport, fmt: str, strict: bool) -> int:
     if fmt == "json":
         data = report.to_dict()
@@ -95,7 +99,7 @@ def _emit(report: FitReport, fmt: str, strict: bool) -> int:
         print(json.dumps(report.best.as_pulse()))
     else:
         print(render(report))
-    failed = (not report.ok) or (strict and bool(report.issues))
+    failed = (not report.ok) or (strict and _has_warnings(report))
     return EXIT_ISSUES if failed else EXIT_OK
 
 
@@ -111,7 +115,7 @@ def _export(report: FitReport, device: Device, args: argparse.Namespace) -> int:
                   negative_first=args.first_phase == "negative")
     if args.out == "-":
         sys.stdout.write(text)
-        failed = args.strict and bool(report.issues)
+        failed = args.strict and _has_warnings(report)
         return EXIT_ISSUES if failed else EXIT_OK
     with open(args.out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)

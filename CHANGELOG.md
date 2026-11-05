@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- New note SG204: when simple rounding leaves a pulse unbalanced, stimgrid says which second-phase
+  amplitude exact balance would need at the rounded widths, and why the device can't give it (between
+  two current steps, below one step, or above the maximum).
+- `--strict` now fails only on errors and warnings, not on notes.
+
 ## 0.4.1
 
 - Contact: a README section, a contact email in the package and citation details, GitHub Discussions

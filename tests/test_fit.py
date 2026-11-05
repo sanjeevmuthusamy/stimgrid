@@ -172,5 +172,39 @@ class FitTests(unittest.TestCase):
         self.assertTrue(all(not isinstance(v, float) or math.isfinite(v) for v in p.values()))
 
 
+class SubstepNoteTests(unittest.TestCase):
+    def note(self, report):
+        return next((i for i in report.issues if i.code == "SG204"), None)
+
+    def test_amplitude_between_steps(self):
+        # 73 steps x 4 samples needs 20.86 steps over 14 samples: 2.086 µA on a 0.1 µA grid
+        r = fit(Pulse(7.3, 117, second_amplitude_ua=1.9, second_width_us=450), intan_rhs2116(0.1, 30000))
+        n = self.note(r)
+        self.assertEqual(n.severity, "note")
+        self.assertIn("133.333 µs and 466.667 µs", n.message)
+        self.assertIn("2.086 µA on the second phase, between the 0.1 µA steps 2 and 2.1 µA", n.message)
+        self.assertTrue(r.ok)
+        self.assertEqual(r.issues[-1].code, "SG204")  # notes come after warnings
+
+    def test_no_note_when_not_needed(self):
+        d = Device("t", time_step_us=10, amplitude_step_ua=1)
+        # unbalanced on paper, but 4 µA balances exactly at these widths
+        r = fit(Pulse(10, 100, second_amplitude_ua=3, second_width_us=250), d)
+        self.assertIn("SG201", codes(r))
+        self.assertIsNone(self.note(r))
+        self.assertIsNone(self.note(fit(Pulse(20, 100), d)))
+        p = Pulse(7.3, 117, second_amplitude_ua=1.9, second_width_us=450)
+        self.assertIsNone(self.note(fit(p, intan_rhs2116(0.1, 30000), max_imbalance=0.5)))
+        self.assertIsNone(self.note(fit(Pulse(2.5, 110, second_amplitude_ua=0.7, second_width_us=390),
+                                        cortical_labs_cl())))
+
+    def test_outside_the_device_range(self):
+        d = Device("t", time_step_us=1, amplitude_step_ua=1, max_amplitude_ua=255)
+        r = fit(Pulse(251, 200, second_amplitude_ua=200, second_width_us=10), d, search_steps=0)
+        self.assertIn("would need 5020 µA on the second phase, above the device's 255 µA", self.note(r).message)
+        r = fit(Pulse(1, 10, second_amplitude_ua=1, second_width_us=30), Device("t", 1, 1))
+        self.assertIn("would need 0.3333 µA on the second phase, below one 1 µA step", self.note(r).message)
+
+
 if __name__ == "__main__":
     unittest.main()

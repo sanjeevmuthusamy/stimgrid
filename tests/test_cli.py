@@ -75,6 +75,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(data["balanced"]["imbalance"], 0)
         self.assertTrue(data["ok"])
         self.assertEqual(data["best_pulse"], json.loads(run("fit", path, "--format", "pulse").stdout))
+        self.assertIn({"code": "SG204", "severity": "note"},
+                      [{k: i[k] for k in ("code", "severity")} for i in data["issues"]])
+        self.assertIn("NOTE    SG204 exact balance at the rounded widths", run("fit", path).stdout)
 
     def test_strict_and_errors(self):
         path = os.path.join(EXAMPLES, "intan_asymmetric.json")

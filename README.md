@@ -73,6 +73,7 @@ device: mcs-stg4000 (1.6 mA version): 20 µs time steps, 0.2 µA steps, max 1600
   rate      frequency_hz 130 Hz -> 129.87 Hz (385 steps per period, -0.100%)
 
 WARNING SG201 simple rounding leaves the pulse unbalanced (imbalance 3.4783%, net -0.032 nC per pulse)
+NOTE    SG204 exact balance at the rounded widths (120 µs and 460 µs) would need 1.93 µA on the second phase, between the 0.2 µA steps 1.8 and 2 µA
 
 best pulse: {"amplitude_ua": 7.2, "width_us": 120, "second_amplitude_ua": 1.8, "second_width_us": 480}
 result: OK
@@ -117,10 +118,12 @@ device: intan-rhs2116 (step 0.1 µA, 30000 samples/s): 33.3333 µs time steps, 0
   ...
 WARNING SG201 simple rounding leaves the pulse unbalanced (imbalance 8.9041%, net 0.08667 nC per pulse)
 WARNING SG203 the balanced pulse changes charge per phase by -15.7%
+NOTE    SG204 exact balance at the rounded widths (133.333 µs and 466.667 µs) would need 2.086 µA on the second phase, between the 0.1 µA steps 2 and 2.1 µA
 ```
 
 Simple rounding would leave 0.087 nC behind on every pulse. stimgrid lists exactly balanced pulses
-instead, closest to your plan first, and warns when the grid forces charge per phase to move.
+instead, closest to your plan first, and warns when the grid forces charge per phase to move. The
+SG204 note says why: at the rounded widths, balance would need a current between the device's steps.
 
 ### Checked against Intan RHX
 
@@ -258,6 +261,7 @@ A-000:
             charge 0.72 nC (-15.70% vs file), net 0 nC, imbalance 0.0000%
   WARNING SG106 width_us 117 becomes 133.333 after rounding (+14.0%)
   WARNING SG203 the balanced pulse changes charge per phase by -15.7%
+  NOTE    SG204 exact balance at the rounded widths (133.333 µs and 466.667 µs) would need 2.086 µA on the second phase, between the 0.1 µA steps 2 and 2.1 µA
   net charge over the whole channel: 8.667 nC (NOT balanced)
 A-001: off: stimulation is off
 
@@ -476,6 +480,7 @@ A request file with `protocol` instead of `pulse` describes a whole protocol; se
 | SG201 | warning | Simple rounding leaves the pulse unbalanced |
 | SG202 | error | No balanced pulse was found within the search and the device's limits |
 | SG203 | warning | The balanced pulse changes charge per phase by more than 5% |
+| SG204 | note | Exact balance at the rounded widths would need a second-phase amplitude the device can't give (between steps, below one step or above the maximum) |
 | SG301 | warning | A rate changes by more than 0.1% on whole periods |
 | SG303 | error | The pulse is longer than one period at that rate |
 | SG304 | error | A rate is above the device's maximum |
