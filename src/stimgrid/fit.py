@@ -184,6 +184,11 @@ def fit(pulse: Pulse, device: Device, rates: Optional[Rates] = None, max_imbalan
         issues += [i for i in (a2_issue, w2_issue) if i]
     else:
         a2 = w2 = None
+    if pulse.biphasic and gap < device.min_gap_ticks:
+        issues.append(Issue("SG107", "error", f"gap_us {pulse.gap_us:g} is shorter than the device's "
+                                              f"{device.us(device.min_gap_ticks):.6g} µs minimum gap between "
+                                              f"phases; stimgrid uses {device.us(device.min_gap_ticks):.6g} µs"))
+        gap = device.min_gap_ticks
     rounded = _deliver(pulse, device, a1, w1, a2, w2, gap)
     if pulse.gap_us and gap == 0:
         issues.append(Issue("SG105", "warning", f"gap_us {pulse.gap_us:g} rounds to 0 on a "

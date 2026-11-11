@@ -5,8 +5,8 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-from stimgrid import (Device, Pulse, Rates, cortical_labs_cl, fit, intan_rhs2116, mcs_stg4000,  # noqa: E402
-                      mcs_stg5, preset, tdt_iz2)
+from stimgrid import (Device, Pulse, Rates, blackrock_cerestim_r96, cortical_labs_cl, fit,  # noqa: E402
+                      intan_rhs2116, mcs_stg4000, mcs_stg5, plexon_plexstim, preset, tdt_iz2)
 
 
 def codes(report):
@@ -50,10 +50,60 @@ class DeviceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 bad()
 
+    def test_cerestim_preset(self):
+        micro = blackrock_cerestim_r96()
+        self.assertEqual((micro.time_step_us, micro.amplitude_step_ua, micro.max_amplitude_ua), (1, 1, 215))
+        self.assertEqual((micro.min_phase_us, micro.max_phase_us), (44, 65535))
+        self.assertEqual(micro.max_charge_per_phase_nc, 30)
+        macro = preset("blackrock-cerestim-r96", range_ua=10000)
+        self.assertEqual((macro.amplitude_step_ua, macro.max_amplitude_ua), (100, 10000))
+        self.assertEqual(macro.max_charge_per_phase_nc, 20000)
+        self.assertIn("macrostimulator", macro.name)
+        for bad in (lambda: blackrock_cerestim_r96(100), lambda: blackrock_cerestim_r96(0)):
+            with self.assertRaises(ValueError):
+                bad()
+        # 200 µA for 200 µs is 40 nC, over the microstimulator's 30 nC per phase
+        over = fit(Pulse(200, 200), micro)
+        self.assertIn("SG104", codes(over))
+        self.assertFalse(over.ok)
+        # phases shorter than 44 µs are out of range
+        self.assertIn("SG102", codes(fit(Pulse(20, 30, gap_us=53), micro)))
+
+    def test_min_gap(self):
+        micro = blackrock_cerestim_r96()
+        self.assertEqual(micro.min_gap_us, 53)
+        short = fit(Pulse(20, 100, gap_us=10, second_amplitude_ua=5, second_width_us=400), micro)
+        self.assertIn("SG107", codes(short))
+        self.assertFalse(short.ok)
+        self.assertEqual(short.rounded.gap_us, 53)  # raised to the minimum
+        self.assertEqual(short.balanced.gap_us, 53)
+        self.assertIn("53 µs minimum gap", [i.message for i in short.issues if i.code == "SG107"][0])
+        ok = fit(Pulse(20, 100, gap_us=53, second_amplitude_ua=5, second_width_us=400), micro)
+        self.assertNotIn("SG107", codes(ok))
+        self.assertTrue(ok.ok)
+        # a single-phase pulse has no gap to check
+        self.assertNotIn("SG107", codes(fit(Pulse(20, 100, biphasic=False), micro)))
+        # the minimum is rounded up to the time grid
+        d = Device("t", time_step_us=20, amplitude_step_ua=1, min_gap_us=50)
+        self.assertEqual(d.min_gap_ticks, 3)
+        self.assertEqual(fit(Pulse(5, 100, second_amplitude_ua=5, second_width_us=100), d).rounded.gap_us, 60)
+        with self.assertRaises(ValueError):
+            Device("t", time_step_us=1, min_gap_us=0)
+        self.assertEqual(Device("t", time_step_us=1).min_gap_ticks, 0)
+
+    def test_plexstim_preset(self):
+        d = plexon_plexstim()
+        self.assertEqual((d.time_step_us, d.amplitude_step_ua, d.max_amplitude_ua), (1, 1, 1000))
+        self.assertEqual((d.min_phase_us, d.max_phase_us, d.max_frequency_hz), (5, 65535, 100000))
+        r = fit(Pulse(20, 100, second_amplitude_ua=5, second_width_us=400), d)
+        self.assertTrue(r.ok)
+        self.assertEqual(r.rounded.net_charge_nc, 0)
+        self.assertNotIn("SG201", codes(r))
+
     def test_every_preset_fits_a_pulse(self):
         from stimgrid import PRESETS
-        for name in PRESETS:
-            r = fit(Pulse(2.5, 110, second_amplitude_ua=0.7, second_width_us=390), preset(name))
+        for name in PRESETS:  # a 60 µs gap suits every preset, including the CereStim's 53 µs minimum
+            r = fit(Pulse(2.5, 110, gap_us=60, second_amplitude_ua=0.7, second_width_us=390), preset(name))
             self.assertTrue(r.ok, name)
             self.assertEqual(r.balanced.imbalance, 0, name)
             self.assertEqual(r.balanced.net_charge_nc, 0, name)

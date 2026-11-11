@@ -308,7 +308,8 @@ def _parser() -> argparse.ArgumentParser:
     q.add_argument("--device", choices=sorted(PRESETS), help="start from a preset")
     q.add_argument("--step-ua", type=float, help="intan-rhs2116: current step size")
     q.add_argument("--sample-rate-hz", type=float, help="intan-rhs2116, tdt-iz2: sampling rate")
-    q.add_argument("--range-ua", type=float, help="mcs-stg4000, mcs-stg5, tdt-iz2: current range (max µA)")
+    q.add_argument("--range-ua", type=float,
+                   help="mcs-stg4000, mcs-stg5, tdt-iz2, blackrock-cerestim-r96: current range (max µA)")
     q.add_argument("--time-step-us", type=float)
     q.add_argument("--amplitude-step-ua", type=float)
     q.add_argument("--max-amplitude-ua", type=float)

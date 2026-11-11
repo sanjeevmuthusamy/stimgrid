@@ -6,7 +6,8 @@ For research use; check results on your own hardware.
 """
 
 from .check import CheckError, CheckReport, check_file, check_text
-from .devices import PRESETS, Device, cortical_labs_cl, intan_rhs2116, mcs_stg4000, mcs_stg5, preset, tdt_iz2
+from .devices import (PRESETS, Device, blackrock_cerestim_r96, cortical_labs_cl, intan_rhs2116, mcs_stg4000,
+                      mcs_stg5, plexon_plexstim, preset, tdt_iz2)
 from .electrode import Density, Electrode, charge_density
 from .formats import ExportError, export
 from .fit import Delivered, FitReport, Issue, Pulse, RateFit, Rates, fit
@@ -15,7 +16,8 @@ from .protocol import Protocol, ProtocolReport, Ramp, Step, fit_protocol, load_p
 
 __version__ = "0.5.0"
 __all__ = [
-    "PRESETS", "CheckError", "CheckReport", "Delivered", "Density", "Device", "Electrode", "ExportError",
+    "PRESETS", "blackrock_cerestim_r96", "plexon_plexstim",
+    "CheckError", "CheckReport", "Delivered", "Density", "Device", "Electrode", "ExportError",
     "FitReport", "InputError", "Issue", "Pulse", "RateFit", "Rates", "charge_density", "check_file", "check_text",
     "cortical_labs_cl", "export", "fit", "Protocol", "ProtocolReport", "Ramp", "Step", "fit_protocol", "load_protocol",
     "protocol_from_dict",

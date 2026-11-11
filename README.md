@@ -12,8 +12,8 @@ whose two phases carry exactly equal charge. Pure Python, no dependencies.
 
 For electrical neurostimulation and microstimulation on multi-electrode arrays (MEAs), microelectrodes
 and neural interfaces, with presets for the Intan RHS2116, Multi Channel Systems STG4000 and STG5,
-Tucker-Davis Technologies IZ2 and Cortical Labs CL, and support for any other current-controlled
-stimulator from its current and timing steps.
+Tucker-Davis Technologies IZ2, Cortical Labs CL, Blackrock CereStim R96 and Plexon PlexStim, and support
+for any other current-controlled stimulator from its current and timing steps.
 
 **Research use only.** stimgrid works from the resolution you give it (or a preset's published
 figures). Check the result on your own hardware and settings.
@@ -448,19 +448,27 @@ WARNING SG501 Shannon k 1.753 is above 1.75 (20 nC per phase, 2829 µC/cm² on 7
 | `mcs-stg4000` | 20 µs, up to 25 kHz | `--range-ua 1600`: 0.2 µA steps; `--range-ua 16000`: 2 µA steps | MCS STG 4002/4004/4008 datasheets |
 | `mcs-stg5` | 5 µs, up to 100 kHz | `--range-ua 160`: 0.1 µA; `1600`: 1 µA; `16000`: 10 µA steps | MCS STG5 brochure |
 | `tdt-iz2` | 1 / RZ sample rate (`--sample-rate-hz`, default 24,414.0625) | continuous (no step published); `--range-ua 300` (IZ2, IZ2M) or `3000` (IZ2H, IZ2MH) | TDT IZ2 manual, IZ2M/IZ2MH spec sheet |
+| `blackrock-cerestim-r96` | 1 µs, phases 44–65,535 µs, gap at least 53 µs, up to 5 kHz | `--range-ua 215` (microstimulator): 1 µA steps, 30 nC per phase; `--range-ua 10000` (macrostimulator): 100 µA steps, 20 µC per phase | CereStim R96 instructions for use, CereStim API instructions for use |
+| `plexon-plexstim` | 1 µs, phases 5–65,535 µs, up to 100 kHz | 1 µA steps, up to 1,000 µA | PlexStim Electrical Stimulator User Guide |
 
 All presets are current mode. The MCS range is the model version you bought (STG4000) or the range you
-select (STG5). The STG4000 160 µA version is left out because its official datasheet could not be
-confirmed.
+select (STG5), and for the CereStim R96 the micro- or macrostimulator version. The STG4000 160 µA version
+is left out because its official datasheet could not be confirmed.
 
-**Not included yet**, because the vendor does not publish a current step or a timing step:
+The CereStim's 1 µs time step comes from its API, which takes widths in whole microseconds. Its
+interphase gap must be at least 53 µs: a shorter gap is an error (SG107), and stimgrid fits the pulse
+with a 53 µs gap instead. The PlexStim preset uses the 1 µA
+steps its software accepts; the hardware itself resolves about 30 nA.
+
+**Not included yet**, because the vendor's published figures are missing or disagree:
 
 | Device | Published | Missing |
 |---|---|---|
 | Axion Maestro Pro / Edge | ±250 µA, ±1.2 V, phase at least 100 µs | current step, time step |
 | MaxWell MaxOne / MaxTwo | 32 stimulation units, ±1.0 V | current range and step, time step |
-| Blackrock CereStim | phase 44–65,535 µs, 4 Hz–5 kHz, 100 µA steps (macro model) | micro model step, time step |
 | A-M Systems 4100 | 100 mA with 1 µA resolution, pulses from 1 µs | time step |
+| Ripple Micro2+Stim, Nano2+Stim, Macro+Stim | ±100 steps of a selectable size (1–20 µA, or 10–200 µA for Macro+Stim) | time step: 1 µs in one place, 33.3 µs clock ticks in another |
+| Digitimer DS8R | 0.1 mA steps, widths in 10 µs steps | the manual and the API reference disagree; the device sets the second phase itself |
 
 If you have one of these, describe it with your own numbers (below). To have it added as a preset,
 [request a device](https://github.com/sanjeevmuthusamy/stimgrid/issues/new?template=device-request.yml)
@@ -477,7 +485,7 @@ stimgrid quick --time-step-us 10 --amplitude-step-ua 0.5 --max-amplitude-ua 100 
 ```
 
 Fields: `time_step_us` (required), `amplitude_step_ua` (leave out for continuous), `max_amplitude_ua`,
-`min_phase_us`, `max_phase_us`, `max_charge_per_phase_nc`, `max_frequency_hz`.
+`min_phase_us`, `max_phase_us`, `min_gap_us`, `max_charge_per_phase_nc`, `max_frequency_hz`.
 
 ## Request files
 
@@ -522,6 +530,7 @@ A request file with `protocol` instead of `pulse` describes a whole protocol; se
 | SG104 | error | Charge per phase is above the device's maximum |
 | SG105 | warning | The interphase gap rounds to zero |
 | SG106 | warning | Rounding moves a value by more than 10% |
+| SG107 | error | The interphase gap is shorter than the device's minimum; stimgrid uses the minimum |
 | SG201 | warning | Simple rounding leaves the pulse unbalanced |
 | SG202 | error | No balanced pulse was found within the search and the device's limits |
 | SG203 | warning | The balanced pulse changes charge per phase by more than 5% |
@@ -635,7 +644,7 @@ MIT. See `LICENSE`.
 
 ## Trademarks
 
-Intan, RHX, Multi Channel Systems, MC_Stimulus, Tucker-Davis Technologies, Synapse, Cortical Labs and
-other product names are trademarks of their owners. They are used only to say which devices and
-software stimgrid works with. stimgrid is an independent project, not affiliated with or endorsed by
-any of these companies.
+Intan, RHX, Multi Channel Systems, MC_Stimulus, Tucker-Davis Technologies, Synapse, Cortical Labs,
+Blackrock Neurotech, CereStim, Plexon, PlexStim and other product names are trademarks of their owners.
+They are used only to say which devices and software stimgrid works with. stimgrid is an independent
+project, not affiliated with or endorsed by any of these companies.

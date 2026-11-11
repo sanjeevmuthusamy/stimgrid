@@ -32,6 +32,15 @@ TDT_IZ2_MAX_RATE_HZ = 195312.5
 TDT_IZ2_SOURCE = ("Tucker-Davis Technologies IZ2 manual and IZ2M/IZ2MH spec sheet: output ±300 µA (IZ2, IZ2M) "
                   "or ±3 mA (IZ2H, IZ2MH); the stimulator runs at the sampling rate of its RZ processor, "
                   "pulses as short as one sample")
+CERESTIM_RANGES = {215.0: 1.0, 10000.0: 100.0}  # max µA: current step µA
+CERESTIM_CHARGE_NC = {215.0: 30.0, 10000.0: 20000.0}
+CERESTIM_SOURCE = ("Blackrock Neurotech CereStim R96 instructions for use (LB-0314 Rev 9.00, 2021): microstimulator "
+                   "1-215 µA in 1 µA increments, 30 nC per phase; macrostimulator 100 µA-10 mA in 100 µA "
+                   "increments, 20 µC per phase; phase width 44-65535 µs, interphase 53-65535 µs, 4 Hz-5 kHz. "
+                   "CereStim API instructions for use (LB-0900 Rev 4.00, 2025): widths in whole microseconds")
+PLEXSTIM_SOURCE = ("Plexon PlexStim Electrical Stimulator User Guide (software version 2, January 2021): phase "
+                   "amplitude +1000 to -1000 µA in steps of 1 µA, phase width and interphase 5-65535 µs in steps "
+                   "of 1 µs, temporal resolution 1 µs, maximum pulse rate 100 kHz")
 
 
 @dataclass(frozen=True)
@@ -42,6 +51,7 @@ class Device:
     max_amplitude_ua: Optional[float] = None
     min_phase_us: Optional[float] = None  # defaults to one time step
     max_phase_us: Optional[float] = None
+    min_gap_us: Optional[float] = None  # shortest interphase gap the device accepts
     max_charge_per_phase_nc: Optional[float] = None
     max_frequency_hz: Optional[float] = None
     source: str = "user-supplied"
@@ -51,7 +61,7 @@ class Device:
         if not (isinstance(self.name, str) and self.name):
             raise ValueError("name must be a non-empty string")
         _positive("time_step_us", self.time_step_us)
-        for field_name in ("amplitude_step_ua", "max_amplitude_ua", "min_phase_us", "max_phase_us",
+        for field_name in ("amplitude_step_ua", "max_amplitude_ua", "min_phase_us", "max_phase_us", "min_gap_us",
                            "max_charge_per_phase_nc", "max_frequency_hz"):
             value = getattr(self, field_name)
             if value is not None:
@@ -73,6 +83,12 @@ class Device:
         if self.min_phase_us is None:
             return 1
         return max(1, math.ceil(self.min_phase_us / self.time_step_us - 1e-9))
+
+    @property
+    def min_gap_ticks(self) -> int:
+        if self.min_gap_us is None:
+            return 0
+        return max(1, math.ceil(self.min_gap_us / self.time_step_us - 1e-9))
 
     @property
     def max_ticks(self) -> Optional[int]:
@@ -185,12 +201,50 @@ def tdt_iz2(range_ua: float = 300.0, sample_rate_hz: float = 24414.0625) -> Devi
     )
 
 
+def blackrock_cerestim_r96(range_ua: float = 215.0) -> Device:
+    """Blackrock CereStim R96, microstimulator (up to 215 µA) or macrostimulator (up to 10 mA) version."""
+    step = _pick_range("the CereStim R96 version", range_ua, CERESTIM_RANGES)
+    model = "microstimulator" if step == 1.0 else "macrostimulator"
+    return Device(
+        name=f"blackrock-cerestim-r96 ({model}, up to {range_ua:g} µA)",
+        time_step_us=1.0,
+        amplitude_step_ua=step,
+        max_amplitude_ua=float(range_ua),
+        min_phase_us=44.0,
+        max_phase_us=65535.0,
+        min_gap_us=53.0,
+        max_charge_per_phase_nc=CERESTIM_CHARGE_NC[float(range_ua)],
+        max_frequency_hz=5000.0,
+        source=CERESTIM_SOURCE,
+        note="The 1 µs time step is inferred from the API, which takes widths as whole microseconds. "
+             "Frequency is set in whole Hz, and the lowest reachable rate depends on the pulse length.",
+    )
+
+
+def plexon_plexstim() -> Device:
+    """Plexon PlexStim, with the phase values its software accepts."""
+    return Device(
+        name="plexon-plexstim",
+        time_step_us=1.0,
+        amplitude_step_ua=1.0,
+        max_amplitude_ua=1000.0,
+        min_phase_us=5.0,
+        max_phase_us=65535.0,
+        max_frequency_hz=100000.0,
+        source=PLEXSTIM_SOURCE,
+        note="Uses the 1 µA steps the PlexStim software accepts for phase amplitudes. The hardware's own "
+             "resolution is finer (about 30 nA), and arbitrary waveforms are rounded to it.",
+    )
+
+
 PRESETS: Dict[str, Callable[..., Device]] = {
     "intan-rhs2116": intan_rhs2116,
     "cortical-labs-cl": cortical_labs_cl,
     "mcs-stg4000": mcs_stg4000,
     "mcs-stg5": mcs_stg5,
     "tdt-iz2": tdt_iz2,
+    "blackrock-cerestim-r96": blackrock_cerestim_r96,
+    "plexon-plexstim": plexon_plexstim,
 }
 
 

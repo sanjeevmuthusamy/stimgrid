@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- New device presets: `blackrock-cerestim-r96` (microstimulator with `--range-ua 215`: 1 µA steps,
+  30 nC per phase; macrostimulator with `--range-ua 10000`: 100 µA steps, 20 µC per phase) and
+  `plexon-plexstim` (1 µA and 1 µs steps, up to 1 mA), each from the vendor's published manuals.
+- Devices can have a minimum interphase gap (`min_gap_us`), 53 µs for the CereStim R96. New error SG107:
+  the gap is shorter than the device's minimum; stimgrid fits the pulse with the minimum gap instead.
+- README: Ripple and Digitimer DS8R added to the devices not included yet, with what is missing.
+- GitHub Actions updated to their current versions; README badges for Python versions and the licence.
+
 ## 0.5.0
 
 - Amplitude ramps in protocols: a train step's `ramp` scales both phases from a fraction of the full
