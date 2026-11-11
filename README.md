@@ -603,7 +603,8 @@ print(report.delivered_us / 1e6, [(c.channel, c.pulses, c.net_charge_nc) for c i
   electrode impedance, channel-to-channel mismatch or the RHS2116's trim settings.
 - Rates are assumed to fall on the same time grid as phase widths.
 - Continuous amplitude means the device's real amplitude resolution is unknown; the reported amplitude
-  may need rounding again on the hardware.
+  may need rounding again on the hardware. If you know your device's real resolution, use a custom
+  device with `amplitude_step_ua` (or `--amplitude-step-ua`) set to it, and stimgrid fits to that.
 
 ## Contact
 
@@ -618,7 +619,7 @@ print(report.delivered_us / 1e6, [(c.channel, c.pulses, c.net_charge_nc) for c i
 If you use stimgrid in published work, please cite it. GitHub's "Cite this repository" button gives the
 reference from `CITATION.cff`:
 
-> Muthusamy S. stimgrid (version 0.4.1) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.23694989
+> Muthusamy S. stimgrid (version 0.5.0) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.23694989
 
 This DOI always resolves to the latest version; each release also has its own DOI on Zenodo.
 

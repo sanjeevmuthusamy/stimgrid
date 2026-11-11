@@ -10,7 +10,7 @@ authors:
   - family-names: "Muthusamy"
     given-names: "Sanjeev"
     email: "sanjeevmuthusamy@bastionoid.com"
-version: "0.4.1"
+version: "0.5.0"
 doi: "10.5281/zenodo.23694989"
 identifiers:
   - type: doi

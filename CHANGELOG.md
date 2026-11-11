@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
 - Amplitude ramps in protocols: a train step's `ramp` scales both phases from a fraction of the full
   pulse up over its first pulses and back down over its last. Each ramp level is fitted to the device on
@@ -11,6 +11,8 @@
   amplitude exact balance would need at the rounded widths, and why the device can't give it (between
   two current steps, below one step, or above the maximum).
 - `--strict` now fails only on errors and warnings, not on notes.
+- README: how to fit a continuous-amplitude device to its real resolution, and a link to the
+  project website (also in the package details).
 
 ## 0.4.1
 
