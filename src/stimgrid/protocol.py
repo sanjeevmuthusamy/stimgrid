@@ -19,11 +19,16 @@ each channel gets, the total charge per phase and the net charge left over the w
 
 A train step's time is pulses x period (the last period included); a burst step's is bursts x burst
 period. Rests are taken as given.
+
+A train step can ramp its amplitude: "ramp": {"up_pulses": 10, "down_pulses": 10, "start_fraction": 0.1}
+scales both phases' amplitudes from 10% up to the full pulse over the first 10 pulses, and back down over
+the last 10. Each ramp level is fitted to the device on its own, since rounding a smaller amplitude can
+unbalance a pulse that is balanced at full amplitude.
 """
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any, Dict, List, Optional, Tuple
 
 from .devices import Device
@@ -34,11 +39,44 @@ from .loader import (FORMAT_VERSION, InputError, _build, _known, _number, _objec
 
 USES = ("best", "rounded")
 MAX_COUNT = 10_000_000
+MAX_RAMP_PULSES = 1000
 STEP_FIELDS = ("name", "pulse", "pulses", "frequency_hz", "bursts", "intra_burst_hz", "burst_rate_hz", "rest_s",
-               "channels")
+               "channels", "ramp")
+RAMP_FIELDS = ("up_pulses", "down_pulses", "start_fraction")
 PROTOCOL_FIELDS = ("stimgrid", "device", "protocol", "repeat", "use", "max_imbalance", "keep_first",
                    "search_steps", "electrode")
 _RATES = ("frequency_hz", "intra_burst_hz", "burst_rate_hz")
+
+
+@dataclass(frozen=True)
+class Ramp:
+    """Scale both phases' amplitudes from start_fraction up to the full pulse over the first up_pulses
+    pulses of a train, and back down to start_fraction over the last down_pulses."""
+
+    up_pulses: int = 0
+    down_pulses: int = 0
+    start_fraction: float = 0.1
+
+    def __post_init__(self) -> None:
+        for name in ("up_pulses", "down_pulses"):
+            v = getattr(self, name)
+            if not (isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= MAX_RAMP_PULSES):
+                raise ValueError(f"{name} must be a whole number from 0 to {MAX_RAMP_PULSES:,}")
+        if self.up_pulses + self.down_pulses == 0:
+            raise ValueError("a ramp needs up_pulses or down_pulses")
+        if not (_number(self.start_fraction) and 0 < self.start_fraction < 1):
+            raise ValueError("start_fraction must be above 0 and below 1")
+
+    @property
+    def pulses(self) -> int:
+        return self.up_pulses + self.down_pulses
+
+    def fractions(self) -> List[float]:
+        """The amplitude scale of each ramp pulse, up then down; the rest of the train runs at 1."""
+        s = self.start_fraction
+        up = [s + (1 - s) * i / self.up_pulses for i in range(self.up_pulses)]
+        down = [s + (1 - s) * (self.down_pulses - 1 - k) / self.down_pulses for k in range(self.down_pulses)]
+        return up + down
 
 
 @dataclass(frozen=True)
@@ -54,6 +92,7 @@ class Step:
     rest_s: Optional[float] = None
     channels: Tuple[str, ...] = ()
     name: str = ""
+    ramp: Optional[Ramp] = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str):
@@ -64,6 +103,7 @@ class Step:
                 raise ValueError("give a pulse, or rest_s for a rest")
             _positive("rest_s", self.rest_s)
             extra = given + (["pulses"] if self.pulses != 1 else []) + (["channels"] if self.channels else [])
+            extra += ["ramp"] if self.ramp is not None else []
             if extra:
                 raise ValueError(f"a rest takes only rest_s and name, not {', '.join(extra)}")
             return
@@ -92,6 +132,14 @@ class Step:
             raise ValueError("channels must be a list of channel names")
         if len(set(self.channels)) != len(self.channels):
             raise ValueError("a channel is listed twice")
+        if self.ramp is not None:
+            if not isinstance(self.ramp, Ramp):
+                raise ValueError("ramp must be a Ramp")
+            if self.bursts is not None:
+                raise ValueError("a ramp is for a train step, not bursts")
+            if self.ramp.pulses > self.pulses:
+                raise ValueError(f"the ramp's {self.ramp.pulses:,} pulses are more than the train's "
+                                 f"{self.pulses:,}")
 
     @property
     def kind(self) -> str:
@@ -117,6 +165,22 @@ class Protocol:
 
 
 @dataclass
+class RampLevel:
+    fraction: float  # of the full pulse's amplitudes
+    pulses: int  # ramp pulses at this level in one run of the step
+    report: FitReport
+    used: Delivered
+
+    def balanced(self, max_imbalance: float) -> bool:
+        return self.used.imbalance <= max_imbalance + 1e-9
+
+    def to_dict(self, max_imbalance: float) -> dict:
+        return {"fraction": self.fraction, "pulses": self.pulses, "used_pulse": self.used.as_pulse(),
+                "balanced": self.balanced(max_imbalance), "net_charge_nc": self.used.net_charge_nc,
+                "imbalance": self.used.imbalance, "issues": [vars(i) for i in self.report.issues]}
+
+
+@dataclass
 class StepReport:
     step: Step
     report: Optional[FitReport]  # None for a rest
@@ -124,23 +188,37 @@ class StepReport:
     planned_us: float
     delivered_us: float
     issues: List[Issue] = field(default_factory=list)
+    ramp: List[RampLevel] = field(default_factory=list)  # lowest level first
 
     @property
     def count(self) -> int:
         return self.step.count
 
     @property
+    def full_count(self) -> int:
+        """Pulses at the full amplitude: all of them, less any ramp."""
+        return self.count - sum(r.pulses for r in self.ramp)
+
+    @property
     def net_charge_nc(self) -> float:
-        return 0.0 if self.used is None else self.used.net_charge_nc * self.count
+        if self.used is None:
+            return 0.0
+        return self.used.net_charge_nc * self.full_count + sum(r.used.net_charge_nc * r.pulses for r in self.ramp)
 
     @property
     def phase_charge_nc(self) -> float:
         """First-phase charge summed over the step's pulses."""
-        return 0.0 if self.used is None else self.used.first_charge_nc * self.count
+        if self.used is None:
+            return 0.0
+        return self.used.first_charge_nc * self.full_count + sum(r.used.first_charge_nc * r.pulses
+                                                                  for r in self.ramp)
 
     @property
     def balanced(self) -> bool:
-        return self.used is None or self.used.imbalance <= self.report.max_imbalance + 1e-9
+        if self.used is None:
+            return True
+        limit = self.report.max_imbalance
+        return self.used.imbalance <= limit + 1e-9 and all(r.balanced(limit) for r in self.ramp)
 
     @property
     def all_issues(self) -> List[Issue]:
@@ -148,12 +226,16 @@ class StepReport:
 
     def to_dict(self) -> dict:
         s = self.step
+        ramp = None
+        if s.ramp is not None:
+            ramp = {**asdict(s.ramp), "levels": [r.to_dict(self.report.max_imbalance) for r in self.ramp]}
         return {
             "name": s.name, "kind": s.kind, "channels": list(s.channels), "count": self.count,
             "pulses": s.pulses if s.pulse else None, "bursts": s.bursts, "rest_s": s.rest_s,
             "planned_s": self.planned_us / 1e6, "delivered_s": self.delivered_us / 1e6,
             "balanced": self.balanced, "net_charge_nc": self.net_charge_nc, "phase_charge_nc": self.phase_charge_nc,
             "used_pulse": self.used.as_pulse() if self.used else None,
+            "ramp": ramp,
             "fit": self.report.to_dict() if self.report else None,
             "issues": [vars(i) for i in self.issues],
         }
@@ -250,8 +332,52 @@ def fit_protocol(protocol: Protocol, device: Device, *, use: str = "best", max_i
         used = report.best if use == "best" else report.rounded
         if electrode is not None:
             assess_density(report, used, electrode)
-        steps.append(_timed(step, report, used, device))
+        timed = _timed(step, report, used, device)
+        if step.ramp is not None:
+            options = dict(max_imbalance=max_imbalance, keep_first=keep_first, search_steps=search_steps)
+            timed.ramp, ramp_issues = _ramp(step, report, device, use, options)
+            timed.issues += ramp_issues
+        steps.append(timed)
     return ProtocolReport(asdict(device), steps, protocol.repeat, use, max_imbalance)
+
+
+def _ramp(step: Step, report: FitReport, device: Device, use: str,
+          options: Dict[str, Any]) -> Tuple[List[RampLevel], List[Issue]]:
+    """Fit each ramp level, and gather its findings by code so a long ramp gives one line per kind."""
+    counts: Dict[float, int] = {}
+    for f in step.ramp.fractions():
+        key = round(f, 12)
+        counts[key] = counts.get(key, 0) + 1
+    period = next((r.period_ticks * device.time_step_us for r in report.rates if r.name == "frequency_hz"), None)
+    p = step.pulse
+    levels, found = [], {}
+    for f in sorted(counts):
+        scaled = replace(p, amplitude_ua=p.amplitude_ua * f,
+                         second_amplitude_ua=None if p.second_amplitude_ua is None else p.second_amplitude_ua * f)
+        level_report = fit(scaled, device, **options)
+        used = level_report.best if use == "best" else level_report.rounded
+        levels.append(RampLevel(f, counts[f], level_report, used))
+        issues = list(level_report.issues)
+        if period is not None and used.duration_us > period + 1e-6:
+            issues.append(Issue("SG602", "error", f"the pulse ({used.duration_us:.6g} µs) is longer than one "
+                                                  f"period ({period:.6g} µs)"))
+        for i in issues:
+            found.setdefault((i.code, i.severity), []).append((f, i.message))
+    gathered = []
+    for (code, severity), hits in found.items():
+        where = ", ".join(_percent(f) for f, _ in hits[:5]) + (", ..." if len(hits) > 5 else "")
+        first = _percent(hits[0][0])
+        if len(hits) == 1:
+            message = f"ramp level {first}: {hits[0][1]}"
+        else:
+            message = f"{len(hits)} ramp levels ({where}); at {first}: {hits[0][1]}"
+        gathered.append(Issue(code, severity, message))
+    gathered.sort(key=lambda i: ({"error": 0, "warning": 1}.get(i.severity, 2), i.code))
+    return levels, gathered
+
+
+def _percent(fraction: float) -> str:
+    return f"{fraction * 100:.4g}%"
 
 
 def _timed(step: Step, report: FitReport, used: Delivered, device: Device) -> StepReport:
@@ -351,6 +477,8 @@ def _step(spec: Any, path: str) -> Step:
         args["channels"] = tuple(str(c) for c in ch)
     if "name" in spec:
         args["name"] = spec["name"]
+    if "ramp" in spec:
+        args["ramp"] = _build(Ramp, spec["ramp"], f"{path}.ramp")
     return _wrap(path, lambda: Step(**args))
 
 

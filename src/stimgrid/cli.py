@@ -149,6 +149,28 @@ def _describe(step) -> str:
     return text
 
 
+def _ramp_lines(s) -> List[str]:
+    ramp = s.step.ramp
+    if ramp is None:
+        return []
+    limit = s.report.max_imbalance
+    ways = ([f"up over {ramp.up_pulses:,} pulses"] if ramp.up_pulses else []) + \
+           ([f"down over {ramp.down_pulses:,} pulses"] if ramp.down_pulses else [])
+    off = sum(1 for r in s.ramp if not r.balanced(limit))
+    lines = [f"  ramp      from {_f(ramp.start_fraction * 100)}%, {' and '.join(ways)}: {len(s.ramp)} level(s), "
+             + (f"{off} NOT balanced" if off else "all balanced")]
+    shown = s.ramp if len(s.ramp) <= 12 else s.ramp[:6] + [None] + s.ramp[-3:]
+    for r in shown:
+        if r is None:
+            lines.append(f"    ... {len(s.ramp) - 9} more (--format json lists every level)")
+            continue
+        d = r.used
+        second = f" | {_f(d.second_amplitude_ua)} µA x {_f(d.second_width_us)} µs" if d.biphasic else ""
+        lines.append(f"    {_f(r.fraction * 100) + '%':>7}  {_f(d.amplitude_ua)} µA x {_f(d.width_us)} µs{second}, "
+                     f"net {_f(d.net_charge_nc, 4)} nC{'' if r.balanced(limit) else ' (NOT balanced)'}")
+    return lines
+
+
 def _change(planned: float, delivered: float) -> str:
     return f"{(delivered - planned) / planned:+.3%}" if planned else "+0.000%"
 
@@ -170,6 +192,7 @@ def render_protocol(report: ProtocolReport) -> str:
         lines.append(f"  plan      {_f(t['amplitude_ua'])} µA x {_f(t['width_us'])} µs | gap {_f(t['gap_us'])} µs "
                      f"| {second}")
         lines.append(_row("using", s.used))
+        lines += _ramp_lines(s)
         for r in s.report.rates:
             lines.append(f"  rate      {r.name} {_f(r.target_hz)} Hz -> {_f(r.delivered_hz)} Hz ({r.change:+.3%})")
         lines.append(f"  time      {_seconds(s.planned_us)} planned, {_seconds(s.delivered_us)} delivered "

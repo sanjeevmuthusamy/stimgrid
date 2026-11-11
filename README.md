@@ -349,6 +349,7 @@ whole protocol runs 30 ms longer than planned.
 | `bursts`, `pulses`, `intra_burst_hz`, `burst_rate_hz` | Bursts: how many, pulses in each, the rate inside a burst and bursts per second |
 | `rest_s` | A rest, in seconds (a step of its own, without a pulse) |
 | `channels` | Channel names or numbers the step uses, for the per-channel totals (optional) |
+| `ramp` | Ramp a train's amplitude up at the start and down at the end (optional; see [Amplitude ramps](#amplitude-ramps)) |
 | `name` | A label for the report (optional) |
 
 At the top level, `repeat` runs the whole list more than once, and `use` (or `--use`) picks the pulse each
@@ -359,10 +360,54 @@ in a single-pulse request.
 - A train's time is pulses × period, its last period included; a burst step's is bursts × burst period.
   Rests are taken as given.
 - A burst that does not fit in one burst period is an error (SG601).
+- A train with a [ramp](#amplitude-ramps) is balanced only if every ramp level is.
 - The exit code is 0 when no step has an error and every pulse used is balanced, so
   `stimgrid fit protocol.json --use rounded` fails if simple rounding would leave charge behind.
 - `--format json` gives every step and total. `--format pulse` and `--export` work on one pulse only, so
   they are not available for a protocol.
+
+### Amplitude ramps
+
+A train can start gently and stop gently: `ramp` scales both phases' amplitudes from a fraction of the
+full pulse up to it over the first pulses, and back down over the last ones.
+
+```json
+{"name": "ramped train", "pulse": {"amplitude_ua": 20, "width_us": 100, "second_amplitude_ua": 5, "second_width_us": 400},
+ "pulses": 200, "frequency_hz": 40, "channels": ["A-000"],
+ "ramp": {"up_pulses": 5, "down_pulses": 5, "start_fraction": 0.15}}
+```
+
+The full pulse balances exactly on an Intan RHS2116 with 0.1 µA steps, but the smaller ramp pulses
+have to be rounded too, and three of them no longer balance. stimgrid fits each ramp level on its own:
+
+```bash
+stimgrid fit examples/intan_ramp_protocol.json --use rounded
+```
+
+```
+  ramp      from 15%, up over 5 pulses and down over 5 pulses: 5 level(s), 3 NOT balanced
+        15%  3 µA x 100 µs | 0.8 µA x 400 µs, net -0.02 nC (NOT balanced)
+        32%  6.4 µA x 100 µs | 1.6 µA x 400 µs, net 0 nC
+        49%  9.8 µA x 100 µs | 2.5 µA x 400 µs, net -0.02 nC (NOT balanced)
+        66%  13.2 µA x 100 µs | 3.3 µA x 400 µs, net 0 nC
+        83%  16.6 µA x 100 µs | 4.2 µA x 400 µs, net -0.02 nC (NOT balanced)
+```
+
+With the default `best`, every level uses its own balanced pulse instead (15% becomes 2.8 µA × 100 µs
+then 0.7 µA × 400 µs), and the step's net charge is 0.
+
+| Ramp field | Meaning |
+|---|---|
+| `up_pulses` | Pulses that ramp up at the start of the train |
+| `down_pulses` | Pulses that ramp down at the end (optional) |
+| `start_fraction` | Where the ramp starts and ends, as a fraction of the full amplitudes (above 0 and below 1; default 0.1) |
+
+- Ramp pulse *i* of `up_pulses` *n* runs at `start + (1 − start) × i / n`, so the first is at
+  `start_fraction` and the train reaches the full pulse right after the ramp. The ramp down mirrors it.
+- Both phases scale together; widths stay as planned before fitting.
+- Ramps are for trains. Findings from the ramp levels are gathered into one line per kind, naming the
+  levels they apply to. A level whose pulse becomes longer than one period is an error (SG602).
+- In Python: `Step(pulse, pulses=200, frequency_hz=40, ramp=Ramp(up_pulses=5, down_pulses=5, start_fraction=0.15))`.
 
 ## Charge density and Shannon k
 
@@ -490,6 +535,7 @@ A request file with `protocol` instead of `pulse` describes a whole protocol; se
 | SG404 | error | `check`: an MC_Stimulus time is not a multiple of 20 µs, or not above zero |
 | SG501 | warning | The Shannon *k* value is above the limit (only with an electrode size) |
 | SG601 | error | Protocol: a burst is longer than one burst period |
+| SG602 | error | Protocol: a ramp level's pulse is longer than one period |
 
 ## Exit codes
 

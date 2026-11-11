@@ -1,0 +1,9 @@
+{
+  "stimgrid": 1,
+  "device": {"preset": "intan-rhs2116", "step_ua": 0.1, "sample_rate_hz": 30000},
+  "protocol": [
+    {"name": "ramped train", "pulse": {"amplitude_ua": 20, "width_us": 100, "second_amplitude_ua": 5, "second_width_us": 400},
+     "pulses": 200, "frequency_hz": 40, "channels": ["A-000"],
+     "ramp": {"up_pulses": 5, "down_pulses": 5, "start_fraction": 0.15}}
+  ]
+}

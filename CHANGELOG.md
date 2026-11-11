@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Amplitude ramps in protocols: a train step's `ramp` scales both phases from a fraction of the full
+  pulse up over its first pulses and back down over its last. Each ramp level is fitted to the device on
+  its own and counted in the step's and channel's charge totals, since rounding a smaller amplitude can
+  unbalance a pulse that balances at full amplitude. New error SG602: a ramp level's pulse is longer than
+  one period. Example: `examples/intan_ramp_protocol.json`.
 - New note SG204: when simple rounding leaves a pulse unbalanced, stimgrid says which second-phase
   amplitude exact balance would need at the rounded widths, and why the device can't give it (between
   two current steps, below one step, or above the maximum).
