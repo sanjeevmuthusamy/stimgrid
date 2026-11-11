@@ -15,7 +15,6 @@ dependencies = []
 keywords = [
   "neuroscience", "electrophysiology", "neurostimulation", "electrical stimulation", "microstimulation",
   "charge balance", "charge-balanced", "charge density", "Shannon criterion", "biphasic pulse", "asymmetric pulse",
-  "stimulation safety",
   "multi-electrode array", "MEA", "microelectrode", "neural interface", "brain-computer interface",
   "DAC quantization", "Intan", "RHS2116", "Multi Channel Systems", "STG4000", "STG5",
   "Tucker-Davis Technologies", "IZ2", "Cortical Labs", "Blackrock", "CereStim", "Plexon", "PlexStim",
