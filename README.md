@@ -1,6 +1,6 @@
 # stimgrid
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23694989.svg)](https://doi.org/10.5281/zenodo.23694989) [![PyPI](https://img.shields.io/pypi/v/stimgrid.svg)](https://pypi.org/project/stimgrid/) [![tests](https://github.com/sanjeevmuthusamy/stimgrid/actions/workflows/tests.yml/badge.svg)](https://github.com/sanjeevmuthusamy/stimgrid/actions/workflows/tests.yml)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23694989.svg)](https://doi.org/10.5281/zenodo.23694989) [![PyPI](https://img.shields.io/pypi/v/stimgrid.svg)](https://pypi.org/project/stimgrid/) [![tests](https://github.com/sanjeevmuthusamy/stimgrid/actions/workflows/tests.yml/badge.svg)](https://github.com/sanjeevmuthusamy/stimgrid/actions/workflows/tests.yml) [![Python](https://img.shields.io/pypi/pyversions/stimgrid.svg)](https://pypi.org/project/stimgrid/) [![License: MIT](https://img.shields.io/pypi/l/stimgrid.svg)](https://github.com/sanjeevmuthusamy/stimgrid/blob/main/LICENSE)
 
 Your stimulator cannot produce every pulse you write down. It sets current in fixed steps and timing on
 a fixed clock, so every value gets rounded. For an asymmetric pulse (for example a short strong first
