@@ -10,6 +10,8 @@
   removed from the devices not included yet.
 - Devices can have a minimum interphase gap (`min_gap_us`), 53 µs for the CereStim R96. New error SG107:
   the gap is shorter than the device's minimum; stimgrid fits the pulse with the minimum gap instead.
+- README: a section on how far balancing moves a pulse, with typical distances from 2,000 random
+  asymmetric pulses and why short phases move most. New script: `examples/balance_distance.py`.
 - README: Ripple and Digitimer DS8R added to the devices not included yet, with what is missing.
 - GitHub Actions updated to their current versions; README badges for Python versions and the licence.
 

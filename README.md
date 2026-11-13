@@ -142,6 +142,37 @@ widths stimgrid prints; they are whole samples, so RHX keeps them as they are.
 
 This is a comparison with RHX's source code, not a measurement on hardware.
 
+## How far balancing moves a pulse
+
+On a device with current steps, exact balance is a whole-number match: the two phases need
+a1 × n1 = a2 × n2 in whole current steps (a) and whole time steps (n). The nearest match is usually
+close, but not always.
+
+On an Intan RHS2116 with 1 µA steps at 30,000 samples/s, 47 µA × 100 µs then 11 µA × 430 µs rounds to a
+1.4% imbalance. The balanced pulse is 48 µA × 100 µs then 12 µA × 400 µs: one current step on each
+phase and one time step on the second, with 2.1% more charge. Across 2,000 random asymmetric pulses on
+the same grid ([`examples/balance_distance.py`](examples/balance_distance.py)):
+
+| How far the balanced pulse moves | Median | 90% of pulses | Worst |
+|---|---|---|---|
+| Current steps (either phase) | 1 | 2 | 14 |
+| Time steps (either phase) | 1 | 2 | 17 |
+| Charge, compared with the plan | 4.0% | 11.6% | 32.5% |
+
+The large moves come from short phases. A phase only two or three time steps long (100 µs or less at
+30,000 samples/s) can't change by a small amount, because one time step is a third of it or more. Of the
+278 pulses that moved by more than 10%, 239 had a first phase that short, and in 257 of the 278,
+rounding alone had already moved the charge by more than 10%. With a first phase of 200 µs or more, the
+worst change was 11%. The Intan example above is a short-phase case: 117 µs falls between three and four samples,
+so the balanced pulse changes the charge by 15.7%.
+
+On a device with continuous current, such as the TDT IZ2, balance costs nothing in current: stimgrid
+sets the amplitude to match. What moves is the widths. On the IZ2's 40.96 µs grid, 100 µs becomes
+81.92 µs, and stimgrid raises the current from 47 to 57.4 µA to keep the planned charge.
+
+To keep the balanced pulse close to your plan, make the short phase several time steps long, and choose
+widths that are whole multiples of the time step.
+
 ## How it works
 
 1. **Rounded.** Each amplitude, phase width and gap is rounded (halves up) to the device's steps and
