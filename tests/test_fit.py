@@ -5,8 +5,8 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-from stimgrid import (Device, Pulse, Rates, blackrock_cerestim_r96, cortical_labs_cl, fit,  # noqa: E402
-                      intan_rhs2116, mcs_stg4000, mcs_stg5, plexon_plexstim, preset, tdt_iz2)
+from stimgrid import (Device, Pulse, Rates, am_systems_4100, blackrock_cerestim_r96, cortical_labs_cl,  # noqa: E402
+                      fit, intan_rhs2116, mcs_stg4000, mcs_stg5, plexon_plexstim, preset, tdt_iz2)
 
 
 def codes(report):
@@ -99,6 +99,15 @@ class DeviceTests(unittest.TestCase):
         self.assertTrue(r.ok)
         self.assertEqual(r.rounded.net_charge_nc, 0)
         self.assertNotIn("SG201", codes(r))
+
+    def test_am_systems_4100_preset(self):
+        d = am_systems_4100()
+        self.assertEqual((d.time_step_us, d.amplitude_step_ua, d.max_amplitude_ua), (1, 1, 100000))
+        self.assertEqual((d.min_phase_us, d.max_phase_us, d.max_frequency_hz), (1, None, None))
+        r = fit(Pulse(2000, 200, second_amplitude_ua=500, second_width_us=800), d)
+        self.assertTrue(r.ok)
+        self.assertEqual(r.rounded.net_charge_nc, 0)
+        self.assertIs(preset("am-systems-4100").max_amplitude_ua, d.max_amplitude_ua)
 
     def test_every_preset_fits_a_pulse(self):
         from stimgrid import PRESETS

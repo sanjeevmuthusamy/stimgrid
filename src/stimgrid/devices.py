@@ -41,6 +41,10 @@ CERESTIM_SOURCE = ("Blackrock Neurotech CereStim R96 instructions for use (LB-03
 PLEXSTIM_SOURCE = ("Plexon PlexStim Electrical Stimulator User Guide (software version 2, January 2021): phase "
                    "amplitude +1000 to -1000 µA in steps of 1 µA, phase width and interphase 5-65535 µs in steps "
                    "of 1 µs, temporal resolution 1 µs, maximum pulse rate 100 kHz")
+AM_4100_SOURCE = ("A-M Systems Model 4100 instruction manual (version 6.0, May 2025): current output 100 mA "
+                  "with 1 µA resolution, minimum monophasic pulse 1 µs, biphasic 2 µs. A-M Systems engineering "
+                  "(email, November 2026): every phase and interphase duration is a whole number of 1 µs steps, "
+                  "from the front panel or over USB or Ethernet")
 
 
 @dataclass(frozen=True)
@@ -237,6 +241,21 @@ def plexon_plexstim() -> Device:
     )
 
 
+
+def am_systems_4100() -> Device:
+    """A-M Systems Model 4100 Isolated High Power Stimulator, in current mode."""
+    return Device(
+        name="am-systems-4100",
+        time_step_us=1.0,
+        amplitude_step_ua=1.0,
+        max_amplitude_ua=100000.0,
+        min_phase_us=1.0,
+        source=AM_4100_SOURCE,
+        note="No maximum phase or pulse rate is set: the manual gives the longest timing as both 25 hours "
+             "and 25 days, and publishes no maximum rate. Use a custom device to add your own limits.",
+    )
+
+
 PRESETS: Dict[str, Callable[..., Device]] = {
     "intan-rhs2116": intan_rhs2116,
     "cortical-labs-cl": cortical_labs_cl,
@@ -245,6 +264,7 @@ PRESETS: Dict[str, Callable[..., Device]] = {
     "tdt-iz2": tdt_iz2,
     "blackrock-cerestim-r96": blackrock_cerestim_r96,
     "plexon-plexstim": plexon_plexstim,
+    "am-systems-4100": am_systems_4100,
 }
 
 

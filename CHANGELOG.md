@@ -5,6 +5,9 @@
 - New device presets: `blackrock-cerestim-r96` (microstimulator with `--range-ua 215`: 1 µA steps,
   30 nC per phase; macrostimulator with `--range-ua 10000`: 100 µA steps, 20 µC per phase) and
   `plexon-plexstim` (1 µA and 1 µs steps, up to 1 mA), each from the vendor's published manuals.
+- New device preset `am-systems-4100` (1 µA and 1 µs steps, up to 100 mA, current mode), from the
+  Model 4100 manual and A-M Systems engineering's confirmation of the 1 µs time step. It has been
+  removed from the devices not included yet.
 - Devices can have a minimum interphase gap (`min_gap_us`), 53 µs for the CereStim R96. New error SG107:
   the gap is shorter than the device's minimum; stimgrid fits the pulse with the minimum gap instead.
 - README: Ripple and Digitimer DS8R added to the devices not included yet, with what is missing.

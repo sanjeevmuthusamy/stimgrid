@@ -18,6 +18,7 @@ keywords = [
   "multi-electrode array", "MEA", "microelectrode", "neural interface", "brain-computer interface",
   "DAC quantization", "Intan", "RHS2116", "Multi Channel Systems", "STG4000", "STG5",
   "Tucker-Davis Technologies", "IZ2", "Cortical Labs", "Blackrock", "CereStim", "Plexon", "PlexStim",
+  "A-M Systems",
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
