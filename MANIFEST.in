@@ -1,2 +1,2 @@
-# Files the tests need, so they also run from the source package
-recursive-include examples *.json
+# Examples, which the tests also need, so they run from the source package too
+recursive-include examples *.json *.py

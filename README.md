@@ -151,7 +151,7 @@ close, but not always.
 On an Intan RHS2116 with 1 µA steps at 30,000 samples/s, 47 µA × 100 µs then 11 µA × 430 µs rounds to a
 1.4% imbalance. The balanced pulse is 48 µA × 100 µs then 12 µA × 400 µs: one current step on each
 phase and one time step on the second, with 2.1% more charge. Across 2,000 random asymmetric pulses on
-the same grid ([`examples/balance_distance.py`](examples/balance_distance.py)):
+the same grid ([`examples/balance_distance.py`](https://github.com/sanjeevmuthusamy/stimgrid/blob/main/examples/balance_distance.py)):
 
 | How far the balanced pulse moves | Median | 90% of pulses | Worst |
 |---|---|---|---|
@@ -663,7 +663,7 @@ print(report.delivered_us / 1e6, [(c.channel, c.pulses, c.net_charge_nc) for c i
 If you use stimgrid in published work, please cite it. GitHub's "Cite this repository" button gives the
 reference from `CITATION.cff`:
 
-> Muthusamy S. stimgrid (version 0.5.0) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.23694989
+> Muthusamy S. stimgrid (version 0.6.0) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.23694989
 
 This DOI always resolves to the latest version; each release also has its own DOI on Zenodo.
 

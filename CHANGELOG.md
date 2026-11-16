@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
 - New device presets: `blackrock-cerestim-r96` (microstimulator with `--range-ua 215`: 1 µA steps,
   30 nC per phase; macrostimulator with `--range-ua 10000`: 100 µA steps, 20 µC per phase) and
@@ -11,7 +11,8 @@
 - Devices can have a minimum interphase gap (`min_gap_us`), 53 µs for the CereStim R96. New error SG107:
   the gap is shorter than the device's minimum; stimgrid fits the pulse with the minimum gap instead.
 - README: a section on how far balancing moves a pulse, with typical distances from 2,000 random
-  asymmetric pulses and why short phases move most. New script: `examples/balance_distance.py`.
+  asymmetric pulses and why short phases move most. New script: `examples/balance_distance.py`,
+  also included in the source package.
 - README: Ripple and Digitimer DS8R added to the devices not included yet, with what is missing.
 - GitHub Actions updated to their current versions; README badges for Python versions and the licence.
 
