@@ -1,14 +1,17 @@
 """Write a fitted pulse in a file the stimulator's own software can load.
 
-Two formats:
+Three formats:
 
 - intan-rhx: a stimulation-settings XML for Intan RHX (File > Load Stimulation Settings),
   for the RHS Stim/Record Controller. Only the pulse-shape attributes are written, so
   trigger, settle and charge-recovery settings already set in RHX stay as they are.
 - mcs-ascii: the MC_Stimulus II / III ASCII import (format 4: one "value time" row per
   segment) for Multi Channel Systems STG4000 and STG5 stimulators, current mode.
+- plexstim-pat: a Plexon PlexStim arbitrary waveform pattern file (.pat), in the "variable"
+  format: amplitude (nA) and duration (µs) pairs. PlexStim loads it per channel; the
+  repetitions and rate are still set in PlexStim, so one pulse is written by default.
 
-Both formats were written from the vendors' published file descriptions. Check the loaded
+All three formats were written from the vendors' published file descriptions. Check the loaded
 values in the vendor software before stimulating.
 """
 
@@ -22,13 +25,16 @@ from xml.sax.saxutils import quoteattr
 from .devices import INTAN_RHS2116_STEPS_UA, Device
 from .fit import Delivered, FitReport
 
-FORMATS = ("intan-rhx", "mcs-ascii")
+FORMATS = ("intan-rhx", "mcs-ascii", "plexstim-pat")
 INTAN_RHX_VERSION = "3.5.2"
 INTAN_RHX_SAMPLE_RATES = (20000, 25000, 30000)  # rates the RHS Stim/Record Controller offers
 INTAN_RHX_MAX_PHASE_US = 5000.0
 INTAN_RHX_MAX_PULSES = 256
 MCS_TIME_GRID_US = 20.0  # the ASCII import takes times in multiples of 20 µs (MC_Stimulus II and III)
 MCS_MAX_PULSES = 10000
+PLEXSTIM_MAX_PAIRS = 499  # PlexStim User Guide (software version 2), 8.5.2
+PLEXSTIM_MAX_DURATION_US = 65535
+PLEXSTIM_MAX_NA = 1_000_000
 _CHANNEL = re.compile(r"^[A-H]-\d{3}$")
 
 
@@ -80,6 +86,10 @@ def export(report: FitReport, device: Device, fmt: str, *, use: str = "best", pu
     if fmt == "mcs-ascii":
         return to_mcs_ascii(pulse, device, channels=channels or (1,), pulses=pulses, period_ticks=period,
                             negative_first=negative_first)
+    if fmt == "plexstim-pat":
+        if channels:
+            raise ExportError("plexstim-pat has no channels: PlexStim loads a pattern file into each channel")
+        return to_plexstim_pat(pulse, device, pulses=pulses, period_ticks=period, negative_first=negative_first)
     raise ExportError(f"unknown export format {fmt!r}; known: {', '.join(FORMATS)}")
 
 
@@ -208,6 +218,65 @@ def _mcs_channels(channels: Sequence) -> List[int]:
     if len(set(out)) != len(out):
         raise ExportError("a channel is listed twice")
     return sorted(out)
+
+
+# --- Plexon PlexStim .pat ----------------------------------------------------------------------------------------
+
+def to_plexstim_pat(pulse: Delivered, device: Device, *, pulses: int = 1, period_ticks: Optional[int] = None,
+                    negative_first: bool = True) -> str:
+    """PlexStim arbitrary waveform pattern, "variable" format: a line "variable", then one amplitude (nA)
+    line and one duration (µs) line per segment. With pulses above 1 the train is written out, with zero
+    current between pulses; otherwise one pulse, to repeat with PlexStim's own repetitions and rate."""
+    _count(pulses, PLEXSTIM_MAX_PAIRS)
+    sign = -1 if negative_first else 1
+    segments = [(sign * pulse.amplitude_ua, pulse.width_us)]
+    if pulse.biphasic:
+        if pulse.gap_ticks:
+            segments.append((0.0, pulse.gap_us))
+        segments.append((-sign * pulse.second_amplitude_ua, pulse.second_width_us))
+    rest_us = 0.0
+    if pulses > 1:
+        period = _period(pulse, device, pulses, period_ticks)
+        rest_us = device.us(period - pulse.duration_ticks)
+    pairs = []
+    for a, us in segments:
+        pairs.append((_whole_na(a), _whole_us(us)))
+    rest = []
+    if rest_us:
+        if not _on_grid(rest_us, 1.0):
+            raise ExportError(f"PlexStim patterns take durations in whole µs, but the time between pulses is "
+                              f"{rest_us:.6g} µs; fit it with a 1 µs time step")
+        left = int(round(rest_us))
+        while left:  # a duration line holds at most 65535 µs
+            rest.append((0, min(left, PLEXSTIM_MAX_DURATION_US)))
+            left -= rest[-1][1]
+    train = (pairs + rest) * (pulses - 1) + pairs
+    if len(train) > PLEXSTIM_MAX_PAIRS:
+        raise ExportError(f"the train needs {len(train)} amplitude-duration pairs, but a PlexStim pattern holds at "
+                          f"most {PLEXSTIM_MAX_PAIRS}; write one pulse and set the repetitions in PlexStim instead")
+    lines = ["variable"]
+    for na, us in train:
+        lines += [str(na), str(us)]
+    return "\n".join(lines) + "\n"
+
+
+def _whole_na(ua: float) -> int:
+    na = ua * 1000
+    if abs(na - round(na)) > 1e-6:
+        raise ExportError(f"PlexStim patterns take amplitudes in whole nA, but this pulse has {ua:.9g} µA")
+    if abs(round(na)) > PLEXSTIM_MAX_NA:
+        raise ExportError(f"{ua:.6g} µA is above PlexStim's 1000 µA")
+    return int(round(na))
+
+
+def _whole_us(us: float) -> int:
+    if not _on_grid(us, 1.0):
+        raise ExportError(f"PlexStim patterns take durations in whole µs, but this pulse has {us:.6g} µs; "
+                          f"fit it with a 1 µs time step (for example the plexon-plexstim preset)")
+    n = int(round(us))
+    if not 1 <= n <= PLEXSTIM_MAX_DURATION_US:
+        raise ExportError(f"PlexStim pattern durations run from 1 to {PLEXSTIM_MAX_DURATION_US} µs, not {n}")
+    return n
 
 
 # --- shared ------------------------------------------------------------------------------------------------------

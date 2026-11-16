@@ -9,7 +9,7 @@
 fit, quick and check take --electrode-diameter-um (or --electrode-area-um2) to also
 report charge density and the Shannon k value.
 
-fit and quick take --export intan-rhx|mcs-ascii --out FILE to write the pulse in a
+fit and quick take --export intan-rhx|mcs-ascii|plexstim-pat --out FILE to write the pulse in a
 file the stimulator's software can load, and --plot FILE to draw it as an SVG image
 (design takes --plot too).
 

@@ -234,10 +234,13 @@ def plexon_plexstim() -> Device:
         max_amplitude_ua=1000.0,
         min_phase_us=5.0,
         max_phase_us=65535.0,
+        min_gap_us=5.0,
         max_frequency_hz=100000.0,
         source=PLEXSTIM_SOURCE,
         note="Uses the 1 µA steps the PlexStim software accepts for phase amplitudes. The hardware's own "
-             "resolution is finer (about 30 nA), and arbitrary waveforms are rounded to it.",
+             "resolution is finer (about 30 nA), and arbitrary waveforms are rounded to it. The 5 µs "
+             "minimum interphase gap is the software's; a .pat pattern file can have no gap, so use a custom "
+             "device to fit one.",
     )
 
 

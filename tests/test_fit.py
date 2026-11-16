@@ -95,10 +95,14 @@ class DeviceTests(unittest.TestCase):
         d = plexon_plexstim()
         self.assertEqual((d.time_step_us, d.amplitude_step_ua, d.max_amplitude_ua), (1, 1, 1000))
         self.assertEqual((d.min_phase_us, d.max_phase_us, d.max_frequency_hz), (5, 65535, 100000))
-        r = fit(Pulse(20, 100, second_amplitude_ua=5, second_width_us=400), d)
+        self.assertEqual(d.min_gap_us, 5)
+        r = fit(Pulse(20, 100, second_amplitude_ua=5, second_width_us=400, gap_us=5), d)
         self.assertTrue(r.ok)
         self.assertEqual(r.rounded.net_charge_nc, 0)
         self.assertNotIn("SG201", codes(r))
+        r = fit(Pulse(20, 100, second_amplitude_ua=5, second_width_us=400), d)  # no gap: below the GUI's 5 µs
+        self.assertIn("SG107", codes(r))
+        self.assertEqual(r.best.gap_us, 5)
 
     def test_am_systems_4100_preset(self):
         d = am_systems_4100()

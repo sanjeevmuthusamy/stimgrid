@@ -52,7 +52,7 @@ This gives you the `stimgrid` command. You can also run it without installing, f
 
 3. **Read the result** (see [Reading the output](#reading-the-output)). Use the `balanced` pulse, or one
    of the options, in your stimulation software, or [export it](#export-to-your-stimulation-software)
-   as a file that Intan RHX or MCS MC_Stimulus can load. Already have such a file?
+   as a file that Intan RHX, MCS MC_Stimulus or Plexon PlexStim can load. Already have such a file?
    [`stimgrid check`](#check-an-existing-file) tells you whether it is balanced.
 4. **Save it for later or for a lab mate** as a [request file](#request-files), and rerun it with
    `stimgrid fit my_pulse.json`.
@@ -263,6 +263,8 @@ software can load. It works with both `quick` and `fit`:
 ```bash
 stimgrid fit examples/intan_asymmetric.json --export intan-rhx --out stim.xml --channels A-000,A-001 --pulses 10
 stimgrid fit examples/mcs_stg4000_asymmetric.json --export mcs-ascii --out pulse.txt --pulses 100
+stimgrid quick --device plexon-plexstim --amplitude-ua 20 --width-us 100 --second-amplitude-ua 5 \
+  --second-width-us 400 --gap-us 5 --export plexstim-pat --out pulse.pat
 ```
 
 The report still prints as usual, and the file is written next to it. With `--out -` only the file
@@ -272,6 +274,7 @@ contents are printed. Nothing is exported if the fit has errors.
 |---|---|
 | `--export intan-rhx` | Intan RHX stimulation settings (`.xml`), for the RHS Stim/Record Controller |
 | `--export mcs-ascii` | MC_Stimulus II (STG4000) or MC_Stimulus III (STG5) ASCII import, current mode |
+| `--export plexstim-pat` | Plexon PlexStim arbitrary waveform pattern (`.pat`) |
 | `--out FILE` | Where to write it (required; `-` prints it) |
 | `--use best` | Which pulse: `best` (the balanced one; the default), `rounded`, `balanced` or `option-1` to `option-3` |
 | `--channels` | RHX channel names such as `A-000,B-015` (default `A-000`), or MCS channel numbers such as `1,2` (default `1`) |
@@ -298,6 +301,20 @@ Other channels are not touched.
 for the rest of the period when a rate is given. Every pulse in the train is written out, because the
 import format has no repeat count.
 
+**Plexon PlexStim.** In the PlexStim software, tick the arbitrary waveform pattern box for a channel and
+load the file with *Load Ch N*. The file uses the "variable" pattern format from the PlexStim user guide
+(section 8.5.2): the word `variable`, then an amplitude line (nA) and a duration line (µs) for each
+segment: the first phase, the gap if there is one, then the second phase.
+
+- By default one pulse is written; set the repetitions and rate in PlexStim as usual. With `--pulses N`
+  and a rate, the whole train is written instead, with zero current between pulses, up to the
+  format's 499 amplitude-duration pairs.
+- Durations must be whole µs and amplitudes whole nA, up to 1,000 µA. The plexon-plexstim preset
+  always gives these.
+- PlexStim does not remember which pattern file a channel uses, so load it again each time you start
+  the software. The hardware rounds amplitudes to about 30 nA.
+- This format was written from the user guide alone; no PlexStim was available to test it on.
+
 - Importing overwrites the open worksheet, and channels that are not in the file come out empty. Save
   your current setup first.
 - The import takes times in multiples of 20 µs on both the STG4000 and the STG5, although the STG5
@@ -315,7 +332,7 @@ reported the charge as balanced. No `mcs-ascii` file has been loaded in MC_Stimu
 ## Check an existing file
 
 `stimgrid check` reads a stimulation file you already have and reports, channel by channel, what the
-stimulator will deliver and whether each pulse is charge-balanced. It reads the same two formats that
+stimulator will deliver and whether each pulse is charge-balanced. It reads two of the formats that
 export writes: Intan RHX stimulation settings (`.xml`, saved with *File > Save Stimulation Settings*) and
 MC_Stimulus II / III ASCII files (format 4, current mode).
 
@@ -531,7 +548,9 @@ is left out because its official datasheet could not be confirmed.
 The CereStim's 1 µs time step comes from its API, which takes widths in whole microseconds. Its
 interphase gap must be at least 53 µs: a shorter gap is an error (SG107), and stimgrid fits the pulse
 with a 53 µs gap instead. The PlexStim preset uses the 1 µA
-steps its software accepts; the hardware itself resolves about 30 nA. The Model 4100's 1 µs time step
+steps its software accepts; the hardware itself resolves about 30 nA. Its software also needs an
+interphase gap of at least 5 µs, so a shorter gap is SG107 too (a `.pat` pattern file can have no gap:
+fit one with a custom 1 µs, 1 µA device). The Model 4100's 1 µs time step
 was confirmed by A-M Systems engineering, since the manual does not state it. That preset sets no
 maximum phase or rate, because the manual gives none that agree; describe a custom device (below) to
 add your own.

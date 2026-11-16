@@ -10,6 +10,11 @@
 - A page to try stimgrid in the browser, with no install: https://sanjeevmuthusamy.github.io/stimgrid/.
   It runs the PyPI package with Pyodide, shows the fitted pulse, its drawing and the matching
   command line, and keeps the inputs in the link so a pulse can be shared.
+- New export format `plexstim-pat`: a Plexon PlexStim arbitrary waveform pattern file, in the documented
+  "variable" format (amplitude in nA and duration in µs per segment). Written from the PlexStim user
+  guide; not yet tested on a PlexStim.
+- The `plexon-plexstim` preset now has the software's 5 µs minimum interphase gap (`min_gap_us`), so a
+  shorter gap gives SG107, as the PlexStim software would not accept it.
 - The browser page has a "Design a pulse" tab, which appears once the installed stimgrid has `design()`.
 
 ## 0.6.0

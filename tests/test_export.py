@@ -11,8 +11,8 @@ EXAMPLES = os.path.join(ROOT, "examples")
 sys.path.insert(0, SRC)
 
 from stimgrid import (Device, Pulse, Rates, cortical_labs_cl, fit, intan_rhs2116, load,  # noqa: E402
-                      mcs_stg4000, mcs_stg5)
-from stimgrid.formats import ExportError, export, to_intan_rhx, to_mcs_ascii  # noqa: E402
+                      mcs_stg4000, mcs_stg5, plexon_plexstim)
+from stimgrid.formats import ExportError, export, to_intan_rhx, to_mcs_ascii, to_plexstim_pat  # noqa: E402
 
 ASYM = Pulse(7.3, 117, second_amplitude_ua=1.9, second_width_us=450)
 
@@ -160,6 +160,56 @@ class McsAsciiTests(unittest.TestCase):
         d = Device("mine", time_step_us=20, amplitude_step_ua=0.5)
         _, rows = mcs_rows(export(fit(ASYM, d), d, "mcs-ascii"))
         self.assertEqual(sum(v * t for v, t in rows), 0)
+
+
+def pat_pairs(text):
+    lines = text.split("\n")
+    assert lines[0] == "variable" and lines[-1] == ""
+    values = [int(x) for x in lines[1:-1]]
+    return list(zip(values[0::2], values[1::2]))
+
+
+class PlexStimPatTests(unittest.TestCase):
+    def test_one_pulse_balanced_in_whole_na_and_us(self):
+        device = plexon_plexstim()
+        report = fit(Pulse(20.3, 100, second_amplitude_ua=5.1, second_width_us=400, gap_us=10), device)
+        pairs = pat_pairs(export(report, device, "plexstim-pat"))
+        best = report.best
+        self.assertEqual(pairs, [(-round(best.amplitude_ua * 1000), best.width_ticks), (0, 10),
+                                 (round(best.second_amplitude_ua * 1000), best.second_width_ticks)])
+        self.assertEqual(sum(na * us for na, us in pairs), 0)  # net charge zero, as PlexStim checks
+
+    def test_train_polarity_and_long_rest(self):
+        device = plexon_plexstim()
+        report = fit(Pulse(20, 100, gap_us=10), device, Rates(frequency_hz=1000))
+        pairs = pat_pairs(export(report, device, "plexstim-pat", pulses=3, negative_first=False))
+        self.assertEqual(pairs[:4], [(20000, 100), (0, 10), (-20000, 100), (0, 790)])
+        self.assertEqual(len(pairs), 3 * 3 + 2 * 1)
+        self.assertEqual(pairs[-1], (-20000, 100))  # no rest after the last pulse
+        slow = fit(Pulse(20, 100, gap_us=10), device, Rates(frequency_hz=10))
+        rests = [p for p in pat_pairs(export(slow, device, "plexstim-pat", pulses=2)) if p[0] == 0 and p[1] > 10]
+        self.assertEqual(rests, [(0, 65535), (0, 99790 - 65535)])  # split at 65535 µs per line
+
+    def test_rejections(self):
+        device = plexon_plexstim()
+        report = fit(Pulse(20, 100, gap_us=10), device, Rates(frequency_hz=1000))
+        with self.assertRaises(ExportError):
+            export(report, device, "plexstim-pat", channels=[1])
+        with self.assertRaises(ExportError):
+            export(report, device, "plexstim-pat", pulses=200)  # over 499 pairs
+        with self.assertRaises(ExportError):
+            export(fit(Pulse(20, 100, gap_us=10), device), device, "plexstim-pat", pulses=2)  # no rate
+        with self.assertRaises(ExportError):  # 117 µs on Intan's 33.3 µs grid is 133.333 µs, not whole µs
+            to_plexstim_pat(fit(Pulse(20, 117), intan_rhs2116()).best, intan_rhs2116())
+        with self.assertRaises(ExportError):  # above PlexStim's 1000 µA
+            to_plexstim_pat(fit(Pulse(2000, 100), Device("big", time_step_us=1, amplitude_step_ua=1)).best, device)
+
+    def test_cli(self):
+        p = run("quick", "--device", "plexon-plexstim", "--amplitude-ua", "20", "--width-us", "100",
+                "--second-amplitude-ua", "5", "--second-width-us", "400", "--gap-us", "5",
+                "--export", "plexstim-pat", "--out", "-")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(pat_pairs(p.stdout), [(-20000, 100), (0, 5), (5000, 400)])
 
 
 class CliExportTests(unittest.TestCase):
