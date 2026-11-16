@@ -2,6 +2,7 @@
 
   stimgrid fit FILE|-     fit the pulse, or the whole protocol, in a request file (or stdin)
   stimgrid quick ...      fit a pulse given as flags
+  stimgrid design ...     list exactly balanced pulses on the grid for a charge and phase ratio
   stimgrid check FILE     check an existing Intan RHX or MC_Stimulus file
   stimgrid devices        list the built-in device presets
 
@@ -25,6 +26,7 @@ from typing import List, Optional
 
 from . import __version__
 from .check import KINDS, CheckError, CheckReport, check_file
+from .design import DesignReport, design
 from .devices import PRESETS, Device, override, preset
 from .electrode import Density, Electrode
 from .formats import FORMATS, ExportError, export
@@ -84,6 +86,51 @@ def render(report: FitReport) -> str:
     lines.append(f"result: {'OK' if report.ok else 'ERROR'}")
     lines.append(NOTE)
     return "\n".join(lines)
+
+
+def _device_line(dev: dict) -> str:
+    amp = "continuous" if dev["amplitude_step_ua"] is None else f"{_f(dev['amplitude_step_ua'])} µA steps"
+    return (f"device: {dev['name']}: {_f(dev['time_step_us'])} µs time steps, {amp}"
+            + (f", max {_f(dev['max_amplitude_ua'])} µA" if dev["max_amplitude_ua"] else ""))
+
+
+def render_design(report: DesignReport) -> str:
+    t = report.target
+    shape = ("symmetric" if t["ratio"] == 1 else
+             f"second phase {_f(t['ratio'])}x longer and {_f(t['ratio'])}x weaker")
+    width = f", first phase {_f(t['width_us'])} µs" if t["width_us"] is not None else ""
+    lines = [_device_line(report.device), f"  aim       {_f(t['charge_nc'])} nC per phase, {shape}{width}"]
+    for i, o in enumerate(report.options, 1):
+        d = o.pulse
+        lines.append(f"  {i:<9} {_f(d.amplitude_ua)} µA x {_f(d.width_us)} µs | gap {_f(d.gap_us)} µs | "
+                     f"{_f(d.second_amplitude_ua)} µA x {_f(d.second_width_us)} µs")
+        lines.append(f"  {'':<9} charge {_f(d.first_charge_nc, 5)} nC ({d.charge_change:+.2%} vs aim), "
+                     f"ratio {_f(o.ratio, 5)} ({o.ratio_change:+.2%}), net {_f(d.net_charge_nc, 4)} nC")
+    lines.append("")
+    for i in report.issues:
+        lines.append(f"{i.severity.upper():<7} {i.code} {i.message}")
+    if report.issues:
+        lines.append("")
+    if report.best is not None:
+        if t["width_us"] is None:
+            lines.append("Among equally close pulses the shorter comes first; give --width-us to choose the width.")
+        lines.append(f"best pulse: {json.dumps(report.best.pulse.as_pulse())}")
+    lines.append(f"result: {'OK' if report.ok else 'ERROR'}")
+    lines.append(NOTE)
+    return "\n".join(lines)
+
+
+def _emit_design(report: DesignReport, fmt: str, strict: bool) -> int:
+    if fmt == "json":
+        data = report.to_dict()
+        data.update({"tool": "stimgrid", "tool_version": __version__, "note": NOTE})
+        print(json.dumps(data, indent=2, ensure_ascii=False, allow_nan=False))
+    elif fmt == "pulse":
+        print(json.dumps(report.best.pulse.as_pulse() if report.best else None))
+    else:
+        print(render_design(report))
+    failed = (not report.ok) or (strict and any(i.severity == "warning" for i in report.issues))
+    return EXIT_ISSUES if failed else EXIT_OK
 
 
 def _has_warnings(report: FitReport) -> bool:
@@ -304,16 +351,19 @@ def _parser() -> argparse.ArgumentParser:
     electrode(p_fit)
     output(p_fit)
 
+    def device_flags(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--device", choices=sorted(PRESETS), help="start from a preset")
+        p.add_argument("--step-ua", type=float, help="intan-rhs2116: current step size")
+        p.add_argument("--sample-rate-hz", type=float, help="intan-rhs2116, tdt-iz2: sampling rate")
+        p.add_argument("--range-ua", type=float,
+                       help="mcs-stg4000, mcs-stg5, tdt-iz2, blackrock-cerestim-r96: current range (max µA)")
+        p.add_argument("--time-step-us", type=float)
+        p.add_argument("--amplitude-step-ua", type=float)
+        p.add_argument("--max-amplitude-ua", type=float)
+        p.add_argument("--max-charge-per-phase-nc", type=float)
+
     q = sub.add_parser("quick", help="fit a pulse given as flags")
-    q.add_argument("--device", choices=sorted(PRESETS), help="start from a preset")
-    q.add_argument("--step-ua", type=float, help="intan-rhs2116: current step size")
-    q.add_argument("--sample-rate-hz", type=float, help="intan-rhs2116, tdt-iz2: sampling rate")
-    q.add_argument("--range-ua", type=float,
-                   help="mcs-stg4000, mcs-stg5, tdt-iz2, blackrock-cerestim-r96: current range (max µA)")
-    q.add_argument("--time-step-us", type=float)
-    q.add_argument("--amplitude-step-ua", type=float)
-    q.add_argument("--max-amplitude-ua", type=float)
-    q.add_argument("--max-charge-per-phase-nc", type=float)
+    device_flags(q)
     q.add_argument("--amplitude-ua", type=float, required=True)
     q.add_argument("--width-us", type=float, required=True)
     q.add_argument("--second-amplitude-ua", type=float)
@@ -327,6 +377,18 @@ def _parser() -> argparse.ArgumentParser:
     q.add_argument("--keep-first", action="store_true", help="balance with the second phase only")
     electrode(q)
     output(q)
+
+    d = sub.add_parser("design", help="list exactly balanced pulses on the device's grid for a charge and ratio")
+    device_flags(d)
+    d.add_argument("--charge-nc", type=float, required=True, help="charge per phase")
+    d.add_argument("--ratio", type=float, default=1.0,
+                   help="second phase this many times longer and weaker than the first (default 1, symmetric)")
+    d.add_argument("--width-us", type=float, help="first-phase width to keep (default: search all widths)")
+    d.add_argument("--gap-us", type=float, default=0.0)
+    d.add_argument("--count", type=int, default=5, help="how many pulses to list (default 5, at most 50)")
+    d.add_argument("--format", choices=("text", "json", "pulse"), default="text",
+                   help="pulse prints only the first pulse as JSON, ready for stimgrid fit or quick")
+    d.add_argument("--strict", action="store_true", help="treat warnings as failures (exit code 1)")
 
     c = sub.add_parser("check", help="check an existing Intan RHX or MC_Stimulus ASCII file")
     c.add_argument("file")
@@ -409,6 +471,13 @@ def main(argv: Optional[List[str]] = None) -> int:
                 if d.note:
                     print(f"  note: {d.note}")
             return EXIT_OK
+        if args.command == "design":
+            try:
+                report = design(_quick_device(args), args.charge_nc, ratio=args.ratio, width_us=args.width_us,
+                                gap_us=args.gap_us, count=args.count)
+            except ValueError as exc:
+                raise InputError(str(exc)) from None
+            return _emit_design(report, args.format, args.strict)
         if args.command == "check":
             report = check_file(args.file, args.kind, sample_rate_hz=args.sample_rate_hz, step_ua=args.step_ua,
                                 device=args.device, range_ua=args.range_ua, max_imbalance=args.max_imbalance,

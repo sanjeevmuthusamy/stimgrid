@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- New command `stimgrid design` and function `design()`: give the charge per phase and the phase ratio
+  (and optionally the first-phase width), and get exactly balanced pulses the device produces exactly,
+  closest to the aim first. New findings SG701 (nothing fits) and SG702 (charge more than 5% off).
 - A page to try stimgrid in the browser, with no install: https://sanjeevmuthusamy.github.io/stimgrid/.
   It runs the PyPI package with Pyodide, shows the fitted pulse, its drawing and the matching
   command line, and keeps the inputs in the link so a pulse can be shared.

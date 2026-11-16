@@ -176,6 +176,42 @@ sets the amplitude to match. What moves is the widths. On the IZ2's 40.96 µs gr
 To keep the balanced pulse close to your plan, make the short phase several time steps long, and choose
 widths that are whole multiples of the time step.
 
+## Design a pulse on the grid
+
+`stimgrid design` starts from what the pulse should do, not from a pulse already written down: the
+charge per phase, and how many times longer (and weaker) the second phase is than the first. It lists
+pulses that the device produces exactly and that are exactly balanced, closest to that aim first, so
+there is nothing left to round.
+
+```bash
+stimgrid design --device intan-rhs2116 --step-ua 1 --charge-nc 4.7 --ratio 4 --width-us 100 --count 3
+```
+
+```text
+device: intan-rhs2116 (step 1 µA, 30000 samples/s): 33.3333 µs time steps, 1 µA steps, max 255 µA
+  aim       4.7 nC per phase, second phase 4x longer and 4x weaker, first phase 100 µs
+  1         48 µA x 100 µs | gap 0 µs | 12 µA x 400 µs
+            charge 4.8 nC (+2.13% vs aim), ratio 4 (+0.00%), net 0 nC
+  2         44 µA x 100 µs | gap 0 µs | 11 µA x 400 µs
+            charge 4.4 nC (-6.38% vs aim), ratio 4 (+0.00%), net 0 nC
+  3         44 µA x 100 µs | gap 0 µs | 12 µA x 366.667 µs
+            charge 4.4 nC (-6.38% vs aim), ratio 3.6667 (-8.33%), net 0 nC
+
+best pulse: {"amplitude_ua": 48, "width_us": 100, "second_amplitude_ua": 12, "second_width_us": 400}
+result: OK
+Values are what the device grid allows; check them on your own hardware. Research use only.
+```
+
+- `--charge-nc` is the charge per phase (required). `--ratio 4` makes the second phase 4 times longer and
+  4 times weaker; the default 1 is a symmetric pulse.
+- `--width-us` keeps the first phase at that width (rounded to the grid). Leave it out to search every
+  width; among equally close pulses the shorter comes first, so on a fine grid the first results can be
+  short, strong pulses near the device's maximum current.
+- Options are ranked by how far the charge and the ratio are from the aim, added together.
+- The device flags are the same as for `quick`, plus `--gap-us`, `--count` (default 5) and
+  `--format text|json|pulse`. `--format pulse` prints the first pulse as JSON for a request file.
+- On a device with continuous current, the charge is exact and only the ratio can differ.
+
 ## How it works
 
 1. **Rounded.** Each amplitude, phase width and gap is rounded (halves up) to the device's steps and
@@ -583,6 +619,8 @@ A request file with `protocol` instead of `pulse` describes a whole protocol; se
 | SG501 | warning | The Shannon *k* value is above the limit (only with an electrode size) |
 | SG601 | error | Protocol: a burst is longer than one burst period |
 | SG602 | error | Protocol: a ramp level's pulse is longer than one period |
+| SG701 | error | `design`: no exactly balanced pulse on the grid fits the charge, ratio and limits |
+| SG702 | warning | `design`: the closest pulse changes charge per phase by more than 5% |
 
 ## Exit codes
 
@@ -601,6 +639,16 @@ from stimgrid import Pulse, Rates, fit, intan_rhs2116
 report = fit(Pulse(7.3, 117, second_amplitude_ua=1.9, second_width_us=450),
              intan_rhs2116(step_ua=0.1, sample_rate_hz=30000), Rates(frequency_hz=40))
 print(report.balanced.as_pulse(), report.balanced.imbalance)
+```
+
+To design a pulse on the grid from a charge and a phase ratio:
+
+```python
+from stimgrid import design
+
+report = design(intan_rhs2116(step_ua=1), charge_nc=4.7, ratio=4, width_us=100)
+for option in report.options:
+    print(option.pulse.as_pulse(), option.pulse.charge_change, option.ratio)
 ```
 
 To export from Python:

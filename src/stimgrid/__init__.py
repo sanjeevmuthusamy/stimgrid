@@ -6,6 +6,7 @@ For research use; check results on your own hardware.
 """
 
 from .check import CheckError, CheckReport, check_file, check_text
+from .design import DesignReport, Option, design
 from .devices import (PRESETS, Device, am_systems_4100, blackrock_cerestim_r96, cortical_labs_cl, intan_rhs2116,
                       mcs_stg4000, mcs_stg5, plexon_plexstim, preset, tdt_iz2)
 from .electrode import Density, Electrode, charge_density
@@ -17,6 +18,7 @@ from .protocol import Protocol, ProtocolReport, Ramp, Step, fit_protocol, load_p
 __version__ = "0.6.0"
 __all__ = [
     "PRESETS", "am_systems_4100", "blackrock_cerestim_r96", "plexon_plexstim",
+    "DesignReport", "Option", "design",
     "CheckError", "CheckReport", "Delivered", "Density", "Device", "Electrode", "ExportError",
     "FitReport", "InputError", "Issue", "Pulse", "RateFit", "Rates", "charge_density", "check_file", "check_text",
     "cortical_labs_cl", "export", "fit", "Protocol", "ProtocolReport", "Ramp", "Step", "fit_protocol", "load_protocol",
