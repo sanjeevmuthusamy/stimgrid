@@ -16,6 +16,9 @@ Tucker-Davis Technologies IZ2, Cortical Labs CL, Blackrock CereStim R96, Plexon 
 A-M Systems Model 4100, and support for any other current-controlled stimulator from its current and
 timing steps.
 
+**Try it in your browser, with no install:** [sanjeevmuthusamy.github.io/stimgrid](https://sanjeevmuthusamy.github.io/stimgrid/).
+The page runs stimgrid itself, from PyPI, inside the browser, so nothing you type is sent anywhere.
+
 **Research use only.** stimgrid works from the resolution you give it (or a preset's published
 figures). Check the result on your own hardware and settings.
 

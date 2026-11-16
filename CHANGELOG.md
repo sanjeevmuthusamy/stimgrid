@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- A page to try stimgrid in the browser, with no install: https://sanjeevmuthusamy.github.io/stimgrid/.
+  It runs the PyPI package with Pyodide, shows the fitted pulse, its drawing and the matching
+  command line, and keeps the inputs in the link so a pulse can be shared.
+
 ## 0.6.0
 
 - New device presets: `blackrock-cerestim-r96` (microstimulator with `--range-ua 215`: 1 µA steps,

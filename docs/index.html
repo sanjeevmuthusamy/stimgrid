@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>stimgrid in the browser</title>
+<meta name="description" content="Fit a stimulation pulse to what a stimulator can actually produce, and find the nearest exactly charge-balanced pulse. Runs in your browser; nothing is sent anywhere.">
+<style>
+:root {
+  --bg: #fbfbfa; --panel: #ffffff; --text: #1d1f21; --muted: #5d6166; --line: #dfe1e3;
+  --accent: #1f6feb; --accent-text: #ffffff; --plan: #8a8f96; --best: #1f6feb;
+  --err: #b42318; --warn: #9a6700; --ok: #1a7f37; --code-bg: #f3f4f5;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141517; --panel: #1c1e21; --text: #e6e7e8; --muted: #a0a5ab; --line: #33363a;
+    --accent: #4c8dff; --accent-text: #0b0c0d; --plan: #8a8f96; --best: #5b9bff;
+    --err: #ff7b72; --warn: #e3b341; --ok: #56d364; --code-bg: #232528;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 26px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 0 0 12px; }
+p { margin: 0 0 12px; }
+a { color: var(--accent); }
+.lead { color: var(--muted); max-width: 70ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 16px; align-items: start; margin-top: 20px; }
+@media (max-width: 760px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+fieldset { border: 0; padding: 0; margin: 0 0 14px; }
+legend { font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 6px; padding: 0; }
+label { display: block; font-size: 14px; margin: 0 0 8px; }
+label span { display: block; color: var(--muted); font-size: 13px; margin-bottom: 2px; }
+input[type=number], select { width: 100%; padding: 7px 9px; font: inherit; color: var(--text);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.check { display: flex; align-items: center; gap: 8px; }
+.check input { margin: 0; }
+.hint { color: var(--muted); font-size: 13px; }
+.buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+button { font: inherit; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--text); cursor: pointer; }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+button:disabled { opacity: .55; cursor: default; }
+pre { margin: 0; background: var(--code-bg); border-radius: 6px; padding: 12px; overflow-x: auto;
+  font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }
+.status { font-size: 14px; color: var(--muted); margin-bottom: 12px; }
+.summary { font-size: 15px; margin-bottom: 12px; }
+.summary b.ok { color: var(--ok); } .summary b.err { color: var(--err); }
+.alts { margin: 2px 0 0; padding-left: 20px; font-size: 14px; }
+.issues { list-style: none; padding: 0; margin: 0 0 12px; }
+.issues li { padding: 6px 10px; border-left: 3px solid var(--line); margin-bottom: 6px; font-size: 14px; }
+.issues li.error { border-color: var(--err); } .issues li.warning { border-color: var(--warn); }
+.issues code { font-weight: 600; }
+.wave { width: 100%; height: auto; display: block; margin-bottom: 4px; }
+.legend { display: flex; gap: 16px; font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+.legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 6px; }
+.cmd { display: flex; gap: 8px; align-items: stretch; margin-bottom: 14px; }
+.cmd pre { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+#device-info details { margin-top: 4px; }
+#device-info details summary { margin-bottom: 2px; font-size: 13px; }
+details summary { cursor: pointer; color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>stimgrid</h1>
+  <p class="lead">Fit a stimulation pulse to what a stimulator can actually produce: its time steps, current steps and limits.
+    stimgrid rounds the pulse to the device's grid and finds the nearest pulse whose two phases carry exactly the same charge.
+    This page runs the real <a href="https://pypi.org/project/stimgrid/">stimgrid</a> package inside your browser,
+    so nothing you type is sent anywhere.</p>
+
+  <div class="grid">
+    <form class="panel" id="form" autocomplete="off">
+      <fieldset>
+        <legend>Device</legend>
+        <label><span>Stimulator</span>
+          <select id="device"></select></label>
+        <div id="device-options"></div>
+        <div id="custom" hidden>
+          <div class="row">
+            <label><span>Time step (µs)</span><input type="number" id="time_step_us" step="any" min="0" value="33.333333"></label>
+            <label><span>Current step (µA)</span><input type="number" id="amplitude_step_ua" step="any" min="0" placeholder="continuous"></label>
+          </div>
+          <label><span>Maximum current (µA)</span><input type="number" id="max_amplitude_ua" step="any" min="0" placeholder="none"></label>
+        </div>
+        <div class="hint" id="device-info"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Pulse</legend>
+        <div class="row">
+          <label><span>First phase (µA)</span><input type="number" id="amplitude_ua" step="any" min="0" value="47"></label>
+          <label><span>First width (µs)</span><input type="number" id="width_us" step="any" min="0" value="100"></label>
+        </div>
+        <div class="row" id="second">
+          <label><span>Second phase (µA)</span><input type="number" id="second_amplitude_ua" step="any" min="0" placeholder="same"></label>
+          <label><span>Second width (µs)</span><input type="number" id="second_width_us" step="any" min="0" placeholder="same"></label>
+        </div>
+        <div class="row">
+          <label><span>Interphase gap (µs)</span><input type="number" id="gap_us" step="any" min="0" value="0"></label>
+          <label><span>Pulse rate (Hz)</span><input type="number" id="frequency_hz" step="any" min="0" placeholder="optional"></label>
+        </div>
+        <label class="check"><input type="checkbox" id="monophasic"> Monophasic (one phase only)</label>
+        <label class="check"><input type="checkbox" id="keep_first"> Keep the first phase; balance with the second only</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Electrode (optional)</legend>
+        <label><span>Disc diameter (µm), for charge density and Shannon k</span>
+          <input type="number" id="electrode_diameter_um" step="any" min="0" placeholder="optional"></label>
+      </fieldset>
+
+      <div class="buttons">
+        <button type="submit" class="primary" id="run" disabled>Fit pulse</button>
+        <button type="button" id="example">Example</button>
+      </div>
+    </form>
+
+    <section class="panel" aria-live="polite">
+      <div class="status" id="status">Loading Python and stimgrid in your browser (a few seconds the first time)…</div>
+      <div id="result" hidden>
+        <div class="summary" id="summary"></div>
+        <ul class="issues" id="issues"></ul>
+        <svg class="wave" id="wave" viewBox="0 0 600 180" role="img" aria-label="Planned and fitted pulse"></svg>
+        <div class="legend"><span><i style="border-color:var(--plan);border-top-style:dashed"></i>plan</span>
+          <span><i style="border-color:var(--best)"></i>best pulse on the device</span></div>
+        <h2>Same as the command line</h2>
+        <div class="cmd"><pre id="command"></pre><button type="button" id="copy">Copy</button></div>
+        <details open><summary>Full report</summary><pre id="report"></pre></details>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <p>Install it with <code>pip install stimgrid</code>. Source, documentation and the device sources:
+      <a href="https://github.com/sanjeevmuthusamy/stimgrid">github.com/sanjeevmuthusamy/stimgrid</a>.
+      <span id="version"></span></p>
+    <p>Values are what the device grid allows; check them on your own hardware. Research use only.
+      Device and company names are trademarks of their owners; stimgrid is not affiliated with them.</p>
+  </footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.29.5/full/pyodide.js"></script>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const PY = `
+import contextlib, inspect, io, json
+import stimgrid
+from stimgrid.cli import main
+from stimgrid import devices
+
+OPTIONS = {
+    "step_ua": [f"{s:g}" for s in devices.INTAN_RHS2116_STEPS_UA],
+    "range_ua": {
+        "mcs-stg4000": [f"{r:g}" for r in devices.MCS_STG4000_RANGES],
+        "mcs-stg5": [f"{r:g}" for r in devices.MCS_STG5_RANGES],
+        "tdt-iz2": [f"{r:g}" for r in devices.TDT_IZ2_RANGES],
+        "blackrock-cerestim-r96": [f"{r:g}" for r in devices.CERESTIM_RANGES],
+    },
+}
+
+def presets():
+    out = {}
+    for name, make in sorted(devices.PRESETS.items()):
+        params = {k: f"{p.default:g}" for k, p in inspect.signature(make).parameters.items()}
+        out[name] = params
+    return json.dumps({"presets": out, "options": OPTIONS, "version": stimgrid.__version__})
+
+def describe(name, options):
+    try:
+        d = devices.preset(name, **{k: float(v) for k, v in json.loads(options).items()})
+    except (ValueError, TypeError) as e:
+        return json.dumps({"error": str(e)})
+    return json.dumps({"time_step_us": d.time_step_us, "amplitude_step_ua": d.amplitude_step_ua,
+                       "max_amplitude_ua": d.max_amplitude_ua, "source": d.source, "note": d.note})
+
+def run(argv_json):
+    argv = json.loads(argv_json)
+    results = {}
+    for fmt in ("json", "text"):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            try:
+                code = main(argv + ["--format", fmt])
+            except SystemExit as e:
+                code = e.code if isinstance(e.code, int) else 2
+        results[fmt] = {"code": code, "out": buf.getvalue()}
+    return json.dumps(results)
+`;
+
+let py = null, meta = null;
+const FIELDS = ["amplitude_ua", "width_us", "second_amplitude_ua", "second_width_us", "gap_us", "frequency_hz",
+                "electrode_diameter_um", "time_step_us", "amplitude_step_ua", "max_amplitude_ua"];
+const CHECKS = ["monophasic", "keep_first"];
+const EXAMPLE = { device: "intan-rhs2116", step_ua: "1", sample_rate_hz: "30000", amplitude_ua: "47", width_us: "100",
+                  second_amplitude_ua: "11", second_width_us: "430", gap_us: "0" };
+
+function fmt(x, digits = 6) { return x == null ? "-" : String(Number(x.toPrecision(digits))); }
+
+function buildDeviceOptions(name, keep = {}) {
+  const box = $("device-options");
+  box.innerHTML = "";
+  $("custom").hidden = name !== "custom";
+  if (name === "custom") return;
+  const params = meta.presets[name];
+  const keys = Object.keys(params);
+  if (!keys.length) return;
+  const row = document.createElement("div");
+  row.className = keys.length > 1 ? "row" : "";
+  for (const key of keys) {
+    const label = document.createElement("label");
+    const title = { step_ua: "Current step (µA)", range_ua: "Current range (max µA)", sample_rate_hz: "Sample rate (Hz)" }[key] || key;
+    label.innerHTML = `<span>${title}</span>`;
+    const choices = key === "step_ua" ? meta.options.step_ua : key === "range_ua" ? meta.options.range_ua[name] : null;
+    let input;
+    if (choices) {
+      input = document.createElement("select");
+      for (const c of choices) input.add(new Option(c, c));
+    } else {
+      input = document.createElement("input");
+      input.type = "number"; input.step = "any"; input.min = "0";
+    }
+    input.id = "opt-" + key;
+    input.dataset.key = key;
+    input.value = keep[key] ?? params[key];
+    input.addEventListener("change", describeDevice);
+    label.appendChild(input);
+    row.appendChild(label);
+  }
+  box.appendChild(row);
+}
+
+function deviceOptions() {
+  const out = {};
+  for (const el of $("device-options").querySelectorAll("[data-key]")) if (el.value !== "") out[el.dataset.key] = el.value;
+  return out;
+}
+
+function describeDevice() {
+  const name = $("device").value, info = $("device-info");
+  if (name === "custom") { info.textContent = "Enter the device's grid. Leave the current step empty if the current is continuous."; return; }
+  const d = JSON.parse(py.globals.get("describe")(name, JSON.stringify(deviceOptions())));
+  if (d.error) { info.textContent = d.error; return; }
+  const amp = d.amplitude_step_ua == null ? "continuous current" : `${fmt(d.amplitude_step_ua)} µA steps`;
+  const max = d.max_amplitude_ua ? `, up to ${fmt(d.max_amplitude_ua)} µA` : "";
+  info.innerHTML = "";
+  info.append(`${fmt(d.time_step_us)} µs time steps, ${amp}${max}.`);
+  const more = document.createElement("details"), sum = document.createElement("summary");
+  sum.textContent = "Where these numbers come from";
+  more.append(sum, `${d.source}${d.note ? " " + d.note : ""}`);
+  info.append(more);
+}
+
+function argv() {
+  const a = ["quick"];
+  const name = $("device").value;
+  if (name !== "custom") {
+    a.push("--device", name);
+    for (const [k, v] of Object.entries(deviceOptions())) a.push("--" + k.replace(/_/g, "-"), v);
+  } else {
+    for (const k of ["time_step_us", "amplitude_step_ua", "max_amplitude_ua"]) if ($(k).value !== "") a.push("--" + k.replace(/_/g, "-"), $(k).value);
+  }
+  const mono = $("monophasic").checked;
+  for (const k of ["amplitude_ua", "width_us", "second_amplitude_ua", "second_width_us", "gap_us", "frequency_hz", "electrode_diameter_um"]) {
+    if (mono && k.startsWith("second_")) continue;
+    if (k === "gap_us" && (mono || $(k).value === "0")) continue;
+    if ($(k).value !== "") a.push("--" + k.replace(/_/g, "-"), $(k).value);
+  }
+  if (mono) a.push("--monophasic");
+  if ($("keep_first").checked && !mono) a.push("--keep-first");
+  return a;
+}
+
+function shell(args) { return "stimgrid " + args.map((s) => /^[\w.\/:-]+$/.test(s) ? s : `'${s}'`).join(" "); }
+
+function drawWave(target, best) {
+  const svg = $("wave"), W = 600, H = 180, mid = H / 2, pad = 12;
+  const phases = (p) => {
+    const a2 = p.biphasic ? (p.second_amplitude_ua ?? p.amplitude_ua) : 0;
+    const w2 = p.biphasic ? (p.second_width_us ?? p.width_us) : 0;
+    return { a1: p.amplitude_ua, w1: p.width_us, gap: p.biphasic ? (p.gap_us || 0) : 0, a2, w2 };
+  };
+  const t = phases(target), b = phases(best);
+  const total = Math.max(t.w1 + t.gap + t.w2, b.w1 + b.gap + b.w2) || 1;
+  const amax = Math.max(t.a1, t.a2, b.a1, b.a2) || 1;
+  const lead = total * 0.08;
+  const x = (us) => pad + (us + lead) / (total + 2 * lead) * (W - 2 * pad);
+  const y = (ua) => mid - ua / amax * (mid - pad);
+  // first phase drawn negative (cathodic first), recharge positive
+  const path = (p) => [
+    `M ${x(-lead)} ${y(0)}`, `H ${x(0)}`, `V ${y(-p.a1)}`, `H ${x(p.w1)}`, `V ${y(0)}`,
+    `H ${x(p.w1 + p.gap)}`, `V ${y(p.a2)}`, `H ${x(p.w1 + p.gap + p.w2)}`, `V ${y(0)}`, `H ${x(total + lead)}`,
+  ].join(" ");
+  svg.innerHTML =
+    `<line x1="${pad}" x2="${W - pad}" y1="${mid}" y2="${mid}" stroke="var(--line)" stroke-width="1"/>` +
+    `<path d="${path(t)}" fill="none" stroke="var(--plan)" stroke-width="2" stroke-dasharray="6 4"/>` +
+    `<path d="${path(b)}" fill="none" stroke="var(--best)" stroke-width="2.5"/>` +
+    `<text x="${W - pad}" y="${H - 4}" text-anchor="end" font-size="12" fill="var(--muted)">${fmt(total, 4)} µs</text>`;
+}
+
+function pct(x) { return `${x >= 0 ? "+" : ""}${(x * 100).toFixed(2)}%`; }
+
+function options(alts) {
+  if (!alts || !alts.length) return "";
+  const items = alts.map((d, i) => `<li>Option ${i + 1}: ${fmt(d.amplitude_ua)} µA × ${fmt(d.width_us)} µs, then ` +
+    `${fmt(d.second_amplitude_ua)} µA × ${fmt(d.second_width_us)} µs (charge ${pct(d.charge_change)})</li>`);
+  return `<div class="hint" style="margin-top:6px">Other exactly balanced pulses:</div><ul class="alts">${items.join("")}</ul>`;
+}
+
+function show(results, args) {
+  $("result").hidden = false;
+  $("status").textContent = "";
+  $("command").textContent = shell(args);
+  $("report").textContent = results.text.out.trim();
+  const issues = $("issues"); issues.innerHTML = "";
+  let data = null;
+  try { data = JSON.parse(results.json.out); } catch (e) { /* usage error: plain text only */ }
+  if (!data) {
+    const msg = results.text.out.trim().split("\n").filter((l) => !l.startsWith("usage:")).pop() || "";
+    $("summary").innerHTML = `<b class="err">Could not fit this pulse.</b> `;
+    $("summary").append(msg.replace(/^stimgrid( quick)?: (error: )?/, ""));
+    $("wave").innerHTML = ""; $("wave").style.display = "none"; document.querySelector(".legend").style.display = "none";
+    $("report").textContent = results.text.out.trim().split("\n").filter((l) => !l.startsWith("usage:")).join("\n") || "Check the inputs.";
+    return;
+  }
+  $("wave").style.display = ""; document.querySelector(".legend").style.display = "";
+  const best = data.balanced || data.rounded;
+  const p = data.best_pulse;
+  const second = best.biphasic ? `, then ${fmt(p.second_amplitude_ua)} µA × ${fmt(p.second_width_us)} µs` : "";
+  const gap = p.gap_us ? ` with a ${fmt(p.gap_us)} µs gap` : "";
+  $("summary").innerHTML =
+    `<b class="${data.ok ? "ok" : "err"}">${data.ok ? "Best pulse" : "Best pulse, with errors"}</b>: ` +
+    `${fmt(p.amplitude_ua)} µA × ${fmt(p.width_us)} µs${second}${gap}. ` +
+    (best.biphasic ? `Imbalance ${(best.imbalance * 100).toFixed(4)}%, charge ` : "Charge ") +
+    `${pct(best.charge_change)} versus the plan.` +
+    options(data.alternatives.filter((d) => JSON.stringify(d) !== JSON.stringify(best)));
+  for (const i of data.issues) {
+    const li = document.createElement("li");
+    li.className = i.severity;
+    li.innerHTML = `<code></code> `;
+    li.querySelector("code").textContent = `${i.severity.toUpperCase()} ${i.code}`;
+    li.appendChild(document.createTextNode(i.message));
+    issues.appendChild(li);
+  }
+  drawWave(data.target, best);
+}
+
+function state() {
+  const s = { device: $("device").value, ...deviceOptions() };
+  const custom = ["time_step_us", "amplitude_step_ua", "max_amplitude_ua"];
+  for (const k of FIELDS) {
+    if (custom.includes(k) && s.device !== "custom") continue;
+    if ($(k).value !== "") s[k] = $(k).value;
+  }
+  for (const k of CHECKS) if ($(k).checked) s[k] = "1";
+  return s;
+}
+
+function apply(s) {
+  if (s.device && (s.device === "custom" || meta.presets[s.device])) $("device").value = s.device;
+  buildDeviceOptions($("device").value, s);
+  for (const k of FIELDS) if (k in s) $(k).value = s[k]; else if (k !== "time_step_us") $(k).value = k === "gap_us" ? "0" : "";
+  for (const k of CHECKS) $(k).checked = s[k] === "1";
+  $("second").hidden = $("monophasic").checked;
+  describeDevice();
+}
+
+function fitNow() {
+  const args = argv();
+  history.replaceState(null, "", "#" + new URLSearchParams(state()).toString());
+  try {
+    show(JSON.parse(py.globals.get("run")(JSON.stringify(args))), args);
+  } catch (e) {
+    $("status").textContent = "Something went wrong running stimgrid: " + e.message;
+  }
+}
+
+async function start() {
+  try {
+    py = await loadPyodide();
+    await py.loadPackage("micropip");
+    await py.runPythonAsync(`import micropip\nawait micropip.install("stimgrid")`);
+    py.runPython(PY);
+    meta = JSON.parse(py.globals.get("presets")());
+  } catch (e) {
+    $("status").textContent = "Could not load stimgrid in this browser (" + e.message + "). You can still install it with pip install stimgrid.";
+    return;
+  }
+  $("version").textContent = `This page is running stimgrid ${meta.version}.`;
+  const sel = $("device");
+  for (const name of Object.keys(meta.presets)) sel.add(new Option(name, name));
+  sel.add(new Option("custom device", "custom"));
+  sel.addEventListener("change", () => { buildDeviceOptions(sel.value); describeDevice(); });
+  $("monophasic").addEventListener("change", () => { $("second").hidden = $("monophasic").checked; });
+  $("form").addEventListener("submit", (e) => { e.preventDefault(); fitNow(); });
+  $("example").addEventListener("click", () => { apply(EXAMPLE); fitNow(); });
+  $("copy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText($("command").textContent); $("copy").textContent = "Copied"; }
+    catch (e) { $("copy").textContent = "Select and copy"; }
+    setTimeout(() => { $("copy").textContent = "Copy"; }, 1500);
+  });
+  const fromHash = Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
+  apply(Object.keys(fromHash).length ? fromHash : EXAMPLE);
+  $("run").disabled = false;
+  fitNow();
+}
+start();
+</script>
+</body>
+</html>
