@@ -251,6 +251,7 @@ Both `quick` and `fit` also take:
 | `--format json` | The full report as JSON, for scripts |
 | `--format pulse` | Only the best pulse as JSON |
 | `--strict` | Treat warnings as failures (exit code 1), for automated checks |
+| `--plot pulse.svg` | Also draw the best pulse over the plan as an SVG image (`design` takes it too) |
 
 `stimgrid --help` and `stimgrid quick --help` list them too.
 
@@ -649,6 +650,16 @@ from stimgrid import design
 report = design(intan_rhs2116(step_ua=1), charge_nc=4.7, ratio=4, width_us=100)
 for option in report.options:
     print(option.pulse.as_pulse(), option.pulse.charge_change, option.ratio)
+```
+
+To draw a pulse as an SVG image (the plan dashed, the pulse on the device solid, first phase negative):
+
+```python
+from stimgrid import pulse_svg
+
+report = fit(Pulse(47, 100, second_amplitude_ua=11, second_width_us=430), intan_rhs2116(step_ua=1))
+with open("pulse.svg", "w") as fh:
+    fh.write(pulse_svg(report.best, plan=report.target))
 ```
 
 To export from Python:

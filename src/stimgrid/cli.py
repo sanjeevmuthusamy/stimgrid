@@ -10,7 +10,8 @@ fit, quick and check take --electrode-diameter-um (or --electrode-area-um2) to a
 report charge density and the Shannon k value.
 
 fit and quick take --export intan-rhx|mcs-ascii --out FILE to write the pulse in a
-file the stimulator's software can load.
+file the stimulator's software can load, and --plot FILE to draw it as an SVG image
+(design takes --plot too).
 
 Exit codes: 0 fitted with no errors (and no warnings with --strict), 1 errors
 (or warnings with --strict), 2 bad input or usage, 3 internal error.
@@ -32,6 +33,7 @@ from .electrode import Density, Electrode
 from .formats import FORMATS, ExportError, export
 from .fit import Delivered, FitReport, Pulse, Rates, fit
 from .loader import InputError, from_dict, read_json
+from .plot import pulse_svg
 from .protocol import USES, ProtocolReport, fit_protocol, is_protocol, protocol_from_dict
 
 EXIT_OK, EXIT_ISSUES, EXIT_INPUT, EXIT_INTERNAL = 0, 1, 2, 3
@@ -131,6 +133,12 @@ def _emit_design(report: DesignReport, fmt: str, strict: bool) -> int:
         print(render_design(report))
     failed = (not report.ok) or (strict and any(i.severity == "warning" for i in report.issues))
     return EXIT_ISSUES if failed else EXIT_OK
+
+
+def _write_plot(path: str, svg: str) -> None:
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(svg)
+    print(f"stimgrid: drew the pulse in {path}", file=sys.stderr)
 
 
 def _has_warnings(report: FitReport) -> bool:
@@ -337,6 +345,7 @@ def _parser() -> argparse.ArgumentParser:
         p.add_argument("--format", choices=("text", "json", "pulse"), default="text",
                        help="pulse prints only the best pulse as JSON")
         p.add_argument("--strict", action="store_true", help="treat warnings as failures (exit code 1)")
+        p.add_argument("--plot", metavar="FILE", help="also draw the best pulse and the plan as an SVG image")
         e = p.add_argument_group("export")
         e.add_argument("--export", choices=FORMATS, help="write the pulse for the stimulator's own software")
         e.add_argument("--out", help="file to write ('-' prints it instead of the report)")
@@ -389,6 +398,7 @@ def _parser() -> argparse.ArgumentParser:
     d.add_argument("--format", choices=("text", "json", "pulse"), default="text",
                    help="pulse prints only the first pulse as JSON, ready for stimgrid fit or quick")
     d.add_argument("--strict", action="store_true", help="treat warnings as failures (exit code 1)")
+    d.add_argument("--plot", metavar="FILE", help="also draw the first pulse as an SVG image")
 
     c = sub.add_parser("check", help="check an existing Intan RHX or MC_Stimulus ASCII file")
     c.add_argument("file")
@@ -447,6 +457,8 @@ def _electrode(args: argparse.Namespace, given: Optional[Electrode] = None) -> O
 def _run_protocol(data, args: argparse.Namespace) -> int:
     if args.export:
         raise InputError("--export writes one pulse; fit a single step's pulse to export it")
+    if args.plot:
+        raise InputError("--plot draws one pulse; fit a single step's pulse to draw it")
     protocol, device, options = protocol_from_dict(data)
     options["electrode"] = _electrode(args, options.get("electrode"))
     if args.use is not None:
@@ -477,6 +489,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                                 gap_us=args.gap_us, count=args.count)
             except ValueError as exc:
                 raise InputError(str(exc)) from None
+            if args.plot and report.best is not None:
+                title = f"stimgrid design: {report.device['name']}"
+                _write_plot(args.plot, pulse_svg(report.best.pulse, title=title))
             return _emit_design(report, args.format, args.strict)
         if args.command == "check":
             report = check_file(args.file, args.kind, sample_rate_hz=args.sample_rate_hz, step_ua=args.step_ua,
@@ -504,6 +519,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             report = fit(pulse, device, rates, **options)
         except ValueError as exc:
             raise InputError(str(exc)) from None
+        if args.plot:
+            _write_plot(args.plot, pulse_svg(report.best, plan=report.target,
+                                             title=f"stimgrid: {report.device['name']}"))
         if args.export:
             return _export(report, device, args)
         return _emit(report, args.format, args.strict)

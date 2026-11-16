@@ -13,12 +13,13 @@ from .electrode import Density, Electrode, charge_density
 from .formats import ExportError, export
 from .fit import Delivered, FitReport, Issue, Pulse, RateFit, Rates, fit
 from .loader import InputError, from_dict, load
+from .plot import pulse_svg
 from .protocol import Protocol, ProtocolReport, Ramp, Step, fit_protocol, load_protocol, protocol_from_dict
 
 __version__ = "0.6.0"
 __all__ = [
     "PRESETS", "am_systems_4100", "blackrock_cerestim_r96", "plexon_plexstim",
-    "DesignReport", "Option", "design",
+    "DesignReport", "Option", "design", "pulse_svg",
     "CheckError", "CheckReport", "Delivered", "Density", "Device", "Electrode", "ExportError",
     "FitReport", "InputError", "Issue", "Pulse", "RateFit", "Rates", "charge_density", "check_file", "check_text",
     "cortical_labs_cl", "export", "fit", "Protocol", "ProtocolReport", "Ramp", "Step", "fit_protocol", "load_protocol",

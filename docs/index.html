@@ -63,6 +63,17 @@ pre { margin: 0; background: var(--code-bg); border-radius: 6px; padding: 12px; 
 #device-info details { margin-top: 4px; }
 #device-info details summary { margin-bottom: 2px; font-size: 13px; }
 details summary { cursor: pointer; color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+.tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 6px 10px; color: var(--muted); }
+.tabs button[aria-selected=true] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+table.opts { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 14px; }
+table.opts th, table.opts td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+table.opts th { color: var(--muted); font-weight: 500; font-size: 13px; }
+table.opts tr.pick { cursor: pointer; }
+table.opts tr.chosen td { background: var(--code-bg); }
+#design-table { overflow-x: auto; }
+.nw { white-space: nowrap; }
+table.opts td { vertical-align: top; }
 footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
 </style>
 </head>
@@ -76,6 +87,10 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
 
   <div class="grid">
     <form class="panel" id="form" autocomplete="off">
+      <div class="tabs" id="tabs" hidden role="tablist">
+        <button type="button" role="tab" data-mode="fit" aria-selected="true">Fit a pulse</button>
+        <button type="button" role="tab" data-mode="design" aria-selected="false">Design a pulse</button>
+      </div>
       <fieldset>
         <legend>Device</legend>
         <label><span>Stimulator</span>
@@ -91,7 +106,23 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
         <div class="hint" id="device-info"></div>
       </fieldset>
 
-      <fieldset>
+      <fieldset id="design-fields" hidden>
+        <legend>Aim</legend>
+        <p class="hint">List pulses the device produces exactly and that are exactly balanced, closest to this aim first.</p>
+        <div class="row">
+          <label><span>Charge per phase (nC)</span><input type="number" id="charge_nc" step="any" min="0" value="4.7"></label>
+          <label><span>Phase ratio</span><input type="number" id="ratio" step="any" min="0" value="4"></label>
+        </div>
+        <div class="row">
+          <label><span>First width (µs)</span><input type="number" id="d_width_us" step="any" min="0" value="100" placeholder="search all"></label>
+          <label><span>Interphase gap (µs)</span><input type="number" id="d_gap_us" step="any" min="0" value="0"></label>
+        </div>
+        <p class="hint">A ratio of 4 makes the second phase 4 times longer and 4 times weaker; 1 is symmetric.
+          Leave the first width empty to search every width.</p>
+        <label><span>How many pulses to list</span><input type="number" id="count" step="1" min="1" max="50" value="5"></label>
+      </fieldset>
+
+      <fieldset id="fit-fields">
         <legend>Pulse</legend>
         <div class="row">
           <label><span>First phase (µA)</span><input type="number" id="amplitude_ua" step="any" min="0" value="47"></label>
@@ -109,7 +140,7 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
         <label class="check"><input type="checkbox" id="keep_first"> Keep the first phase; balance with the second only</label>
       </fieldset>
 
-      <fieldset>
+      <fieldset id="electrode-fields">
         <legend>Electrode (optional)</legend>
         <label><span>Disc diameter (µm), for charge density and Shannon k</span>
           <input type="number" id="electrode_diameter_um" step="any" min="0" placeholder="optional"></label>
@@ -126,8 +157,9 @@ footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
       <div id="result" hidden>
         <div class="summary" id="summary"></div>
         <ul class="issues" id="issues"></ul>
+        <div id="design-table"></div>
         <svg class="wave" id="wave" viewBox="0 0 600 180" role="img" aria-label="Planned and fitted pulse"></svg>
-        <div class="legend"><span><i style="border-color:var(--plan);border-top-style:dashed"></i>plan</span>
+        <div class="legend"><span id="plan-key"><i style="border-color:var(--plan);border-top-style:dashed"></i>plan</span>
           <span><i style="border-color:var(--best)"></i>best pulse on the device</span></div>
         <h2>Same as the command line</h2>
         <div class="cmd"><pre id="command"></pre><button type="button" id="copy">Copy</button></div>
@@ -170,7 +202,8 @@ def presets():
     for name, make in sorted(devices.PRESETS.items()):
         params = {k: f"{p.default:g}" for k, p in inspect.signature(make).parameters.items()}
         out[name] = params
-    return json.dumps({"presets": out, "options": OPTIONS, "version": stimgrid.__version__})
+    return json.dumps({"presets": out, "options": OPTIONS, "version": stimgrid.__version__,
+                       "design": hasattr(stimgrid, "design")})
 
 def describe(name, options):
     try:
@@ -194,7 +227,10 @@ def run(argv_json):
     return json.dumps(results)
 `;
 
-let py = null, meta = null;
+let py = null, meta = null, mode = "fit", designData = null;
+const DESIGN_FIELDS = ["charge_nc", "ratio", "d_width_us", "d_gap_us", "count"];
+const DESIGN_EXAMPLE = { mode: "design", device: "intan-rhs2116", step_ua: "1", sample_rate_hz: "30000",
+                         charge_nc: "4.7", ratio: "4", d_width_us: "100", d_gap_us: "0", count: "5" };
 const FIELDS = ["amplitude_ua", "width_us", "second_amplitude_ua", "second_width_us", "gap_us", "frequency_hz",
                 "electrode_diameter_um", "time_step_us", "amplitude_step_ua", "max_amplitude_ua"];
 const CHECKS = ["monophasic", "keep_first"];
@@ -257,8 +293,16 @@ function describeDevice() {
   info.append(more);
 }
 
-function argv() {
-  const a = ["quick"];
+function setMode(m) {
+  mode = (m === "design" && meta && meta.design) ? "design" : "fit";
+  for (const b of document.querySelectorAll("#tabs button")) b.setAttribute("aria-selected", String(b.dataset.mode === mode));
+  $("design-fields").hidden = mode !== "design";
+  $("fit-fields").hidden = mode === "design";
+  $("electrode-fields").hidden = mode === "design";
+  $("run").textContent = mode === "design" ? "Design pulses" : "Fit pulse";
+}
+
+function deviceArgs(a) {
   const name = $("device").value;
   if (name !== "custom") {
     a.push("--device", name);
@@ -266,6 +310,22 @@ function argv() {
   } else {
     for (const k of ["time_step_us", "amplitude_step_ua", "max_amplitude_ua"]) if ($(k).value !== "") a.push("--" + k.replace(/_/g, "-"), $(k).value);
   }
+}
+
+function argv() {
+  if (mode === "design") {
+    const a = ["design"];
+    deviceArgs(a);
+    for (const [id, flag] of [["charge_nc", "--charge-nc"], ["ratio", "--ratio"], ["d_width_us", "--width-us"],
+                              ["d_gap_us", "--gap-us"], ["count", "--count"]]) {
+      const v = $(id).value;
+      if (v === "" || (id === "d_gap_us" && v === "0") || (id === "count" && v === "5") || (id === "ratio" && v === "1")) continue;
+      a.push(flag, v);
+    }
+    return a;
+  }
+  const a = ["quick"];
+  deviceArgs(a);
   const mono = $("monophasic").checked;
   for (const k of ["amplitude_ua", "width_us", "second_amplitude_ua", "second_width_us", "gap_us", "frequency_hz", "electrode_diameter_um"]) {
     if (mono && k.startsWith("second_")) continue;
@@ -286,7 +346,7 @@ function drawWave(target, best) {
     const w2 = p.biphasic ? (p.second_width_us ?? p.width_us) : 0;
     return { a1: p.amplitude_ua, w1: p.width_us, gap: p.biphasic ? (p.gap_us || 0) : 0, a2, w2 };
   };
-  const t = phases(target), b = phases(best);
+  const b = phases(best), t = target ? phases(target) : b;
   const total = Math.max(t.w1 + t.gap + t.w2, b.w1 + b.gap + b.w2) || 1;
   const amax = Math.max(t.a1, t.a2, b.a1, b.a2) || 1;
   const lead = total * 0.08;
@@ -299,7 +359,7 @@ function drawWave(target, best) {
   ].join(" ");
   svg.innerHTML =
     `<line x1="${pad}" x2="${W - pad}" y1="${mid}" y2="${mid}" stroke="var(--line)" stroke-width="1"/>` +
-    `<path d="${path(t)}" fill="none" stroke="var(--plan)" stroke-width="2" stroke-dasharray="6 4"/>` +
+    (target ? `<path d="${path(t)}" fill="none" stroke="var(--plan)" stroke-width="2" stroke-dasharray="6 4"/>` : "") +
     `<path d="${path(b)}" fill="none" stroke="var(--best)" stroke-width="2.5"/>` +
     `<text x="${W - pad}" y="${H - 4}" text-anchor="end" font-size="12" fill="var(--muted)">${fmt(total, 4)} µs</text>`;
 }
@@ -318,18 +378,24 @@ function show(results, args) {
   $("status").textContent = "";
   $("command").textContent = shell(args);
   $("report").textContent = results.text.out.trim();
-  const issues = $("issues"); issues.innerHTML = "";
+  $("issues").innerHTML = "";
   let data = null;
   try { data = JSON.parse(results.json.out); } catch (e) { /* usage error: plain text only */ }
   if (!data) {
     const msg = results.text.out.trim().split("\n").filter((l) => !l.startsWith("usage:")).pop() || "";
-    $("summary").innerHTML = `<b class="err">Could not fit this pulse.</b> `;
-    $("summary").append(msg.replace(/^stimgrid( quick)?: (error: )?/, ""));
+    $("summary").innerHTML = `<b class="err">Could not ${mode === "design" ? "design pulses" : "fit this pulse"}.</b> `;
+    $("summary").append(msg.replace(/^stimgrid( quick| design)?: (error: )?/, ""));
+    $("design-table").innerHTML = "";
     $("wave").innerHTML = ""; $("wave").style.display = "none"; document.querySelector(".legend").style.display = "none";
     $("report").textContent = results.text.out.trim().split("\n").filter((l) => !l.startsWith("usage:")).join("\n") || "Check the inputs.";
     return;
   }
   $("wave").style.display = ""; document.querySelector(".legend").style.display = "";
+  if (mode === "design") {
+    renderIssues(data.issues);
+    showDesign(data);
+    return;
+  }
   const best = data.balanced || data.rounded;
   const p = data.best_pulse;
   const second = best.biphasic ? `, then ${fmt(p.second_amplitude_ua)} µA × ${fmt(p.second_width_us)} µs` : "";
@@ -340,7 +406,15 @@ function show(results, args) {
     (best.biphasic ? `Imbalance ${(best.imbalance * 100).toFixed(4)}%, charge ` : "Charge ") +
     `${pct(best.charge_change)} versus the plan.` +
     options(data.alternatives.filter((d) => JSON.stringify(d) !== JSON.stringify(best)));
-  for (const i of data.issues) {
+  renderIssues(data.issues);
+  $("design-table").innerHTML = "";
+  $("plan-key").style.display = "";
+  drawWave(data.target, best);
+}
+
+function renderIssues(list) {
+  const issues = $("issues"); issues.innerHTML = "";
+  for (const i of list) {
     const li = document.createElement("li");
     li.className = i.severity;
     li.innerHTML = `<code></code> `;
@@ -348,11 +422,48 @@ function show(results, args) {
     li.appendChild(document.createTextNode(i.message));
     issues.appendChild(li);
   }
-  drawWave(data.target, best);
+}
+
+function showDesign(data) {
+  designData = data;
+  const best = data.options[0];
+  $("plan-key").style.display = "none";
+  if (!best) {
+    $("summary").innerHTML = `<b class="err">No pulse fits.</b> See the finding below.`;
+    $("design-table").innerHTML = ""; $("wave").style.display = "none"; document.querySelector(".legend").style.display = "none";
+    return;
+  }
+  $("summary").innerHTML = `<b class="${data.ok ? "ok" : "err"}">${data.options.length} exactly balanced pulse${data.options.length > 1 ? "s" : ""}</b>` +
+    ` on the device's grid, closest to the aim first. Choose one to draw it.` +
+    (data.target.width_us == null ? ` Among equally close pulses the shorter comes first; give a first width to choose the width.` : "");
+  const rows = data.options.map((o, i) => {
+    const d = o.pulse;
+    const gap = d.gap_us ? `<span class="hint">gap ${fmt(d.gap_us)} µs</span><br>` : "";
+    return `<tr class="pick" data-i="${i}"><td>${i + 1}</td>` +
+      `<td><span class="nw">${fmt(d.amplitude_ua)} µA × ${fmt(d.width_us)} µs</span><br>${gap}` +
+      `<span class="nw">${fmt(d.second_amplitude_ua)} µA × ${fmt(d.second_width_us)} µs</span></td>` +
+      `<td><span class="nw">${fmt(d.first_charge_nc, 5)} nC</span><br><span class="hint">${pct(d.charge_change)}</span></td>` +
+      `<td>${fmt(o.ratio, 4)}<br><span class="hint">${pct(o.ratio_change)}</span></td></tr>`;
+  });
+  $("design-table").innerHTML = `<table class="opts"><thead><tr><th>#</th><th>Pulse (first, then second phase)</th>` +
+    `<th>Charge</th><th>Ratio</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+  for (const tr of $("design-table").querySelectorAll("tr.pick")) tr.addEventListener("click", () => pick(Number(tr.dataset.i)));
+  pick(0);
+}
+
+function pick(i) {
+  for (const tr of $("design-table").querySelectorAll("tr.pick")) tr.classList.toggle("chosen", Number(tr.dataset.i) === i);
+  drawWave(null, designData.options[i].pulse);
 }
 
 function state() {
   const s = { device: $("device").value, ...deviceOptions() };
+  if (mode === "design") {
+    s.mode = "design";
+    for (const k of DESIGN_FIELDS) s[k] = $(k).value;
+    if (s.device === "custom") for (const k of ["time_step_us", "amplitude_step_ua", "max_amplitude_ua"]) if ($(k).value !== "") s[k] = $(k).value;
+    return s;
+  }
   const custom = ["time_step_us", "amplitude_step_ua", "max_amplitude_ua"];
   for (const k of FIELDS) {
     if (custom.includes(k) && s.device !== "custom") continue;
@@ -365,8 +476,15 @@ function state() {
 function apply(s) {
   if (s.device && (s.device === "custom" || meta.presets[s.device])) $("device").value = s.device;
   buildDeviceOptions($("device").value, s);
-  for (const k of FIELDS) if (k in s) $(k).value = s[k]; else if (k !== "time_step_us") $(k).value = k === "gap_us" ? "0" : "";
-  for (const k of CHECKS) $(k).checked = s[k] === "1";
+  const custom = ["time_step_us", "amplitude_step_ua", "max_amplitude_ua"];
+  for (const k of FIELDS) {  // in design mode only the device fields come from the link; the pulse fields stay
+    if (k in s) $(k).value = s[k];
+    else if (s.mode !== "design" && k !== "time_step_us") $(k).value = k === "gap_us" ? "0" : "";
+    else if (s.mode === "design" && custom.includes(k) && k !== "time_step_us") $(k).value = "";
+  }
+  if (s.mode !== "design") for (const k of CHECKS) $(k).checked = s[k] === "1";
+  for (const k of DESIGN_FIELDS) if (k in s) $(k).value = s[k];
+  setMode(s.mode);
   $("second").hidden = $("monophasic").checked;
   describeDevice();
 }
@@ -385,7 +503,11 @@ async function start() {
   try {
     py = await loadPyodide();
     await py.loadPackage("micropip");
-    await py.runPythonAsync(`import micropip\nawait micropip.install("stimgrid")`);
+    // On a local preview, ?wheel=file.whl (a file next to this page) tests an unreleased build.
+    const wheel = new URLSearchParams(location.search).get("wheel");
+    const local = ["localhost", "127.0.0.1"].includes(location.hostname) && wheel && /^[\w.\-]+\.whl$/.test(wheel);
+    const source = local ? new URL(wheel, location.href).href : "stimgrid";
+    await py.runPythonAsync(`import micropip\nawait micropip.install(${JSON.stringify(source)})`);
     py.runPython(PY);
     meta = JSON.parse(py.globals.get("presets")());
   } catch (e) {
@@ -399,7 +521,11 @@ async function start() {
   sel.addEventListener("change", () => { buildDeviceOptions(sel.value); describeDevice(); });
   $("monophasic").addEventListener("change", () => { $("second").hidden = $("monophasic").checked; });
   $("form").addEventListener("submit", (e) => { e.preventDefault(); fitNow(); });
-  $("example").addEventListener("click", () => { apply(EXAMPLE); fitNow(); });
+  $("example").addEventListener("click", () => { apply(mode === "design" ? DESIGN_EXAMPLE : EXAMPLE); fitNow(); });
+  if (meta.design) {
+    $("tabs").hidden = false;
+    for (const b of document.querySelectorAll("#tabs button")) b.addEventListener("click", () => { setMode(b.dataset.mode); fitNow(); });
+  }
   $("copy").addEventListener("click", async () => {
     try { await navigator.clipboard.writeText($("command").textContent); $("copy").textContent = "Copied"; }
     catch (e) { $("copy").textContent = "Select and copy"; }
