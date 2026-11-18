@@ -1,12 +1,15 @@
 """Check an existing stimulation file: what each channel delivers, and whether it is balanced.
 
-Reads the two formats stimgrid exports:
+Reads the three formats stimgrid exports:
 
 - Intan RHX stimulation settings (.xml, saved with File > Save Stimulation Settings).
 - MCS MC_Stimulus II / III ASCII import, format 4 ("value time" rows), current mode.
+- Plexon PlexStim arbitrary waveform patterns (.pat), "variable" or "fixed" format.
 
-Each pulse is rounded to the device grid the way the vendor software does it (nearest step,
-halves up), so the result is what the stimulator delivers, not what the file says.
+For RHX and MC_Stimulus each pulse is rounded to the device grid the way the vendor software does
+it (nearest step, halves up), so the result is what the stimulator delivers, not what the file says.
+A PlexStim pattern is checked at the file's own resolution (whole nA and µs), which is how PlexStim
+checks its net charge; the hardware then rounds amplitudes to about 30 nA.
 """
 
 from __future__ import annotations
@@ -19,9 +22,11 @@ from typing import Dict, List, Optional, Tuple
 from .devices import INTAN_RHS2116_STEPS_UA, Device, intan_rhs2116, mcs_stg4000, mcs_stg5, override
 from .electrode import Electrode
 from .fit import FitReport, Issue, Pulse, Rates, assess_density, fit
-from .formats import INTAN_RHX_MAX_PHASE_US, INTAN_RHX_MAX_PULSES, INTAN_RHX_SAMPLE_RATES, MCS_TIME_GRID_US
+from .formats import (INTAN_RHX_MAX_PHASE_US, INTAN_RHX_MAX_PULSES, INTAN_RHX_SAMPLE_RATES, MCS_TIME_GRID_US,
+                      PLEXSTIM_MAX_DURATION_US, PLEXSTIM_MAX_NA, PLEXSTIM_MAX_PAIRS)
 
-KINDS = ("intan-rhx", "mcs-ascii")
+KINDS = ("intan-rhx", "mcs-ascii", "plexstim-pat")
+PLEXSTIM_MAX_FIXED_VALUES = 999  # PlexStim User Guide (software version 2), 8.5.1
 
 
 class CheckError(ValueError):
@@ -53,14 +58,19 @@ class ChannelCheck:
     note: str = ""
     pulses: List[PulseCheck] = field(default_factory=list)
     issues: List[Issue] = field(default_factory=list)
+    total_charge_nc: Optional[float] = None  # set for a shaped waveform that is not split into pulses
 
     @property
     def net_charge_nc(self) -> float:
         """Net charge over every pulse the channel delivers in one run of the file."""
+        if self.total_charge_nc is not None:
+            return self.total_charge_nc
         return sum(p.net_charge_nc * p.count for p in self.pulses)
 
     @property
     def balanced(self) -> bool:
+        if self.total_charge_nc is not None:
+            return abs(self.total_charge_nc) <= 1e-9
         return all(p.balanced for p in self.pulses)
 
     @property
@@ -111,9 +121,12 @@ def detect(text: str) -> str:
         return "intan-rhx"
     if head.lower().startswith("multi channel systems mc_stimulus"):
         return "mcs-ascii"
+    if head.split("\n", 1)[0].strip().lower() in ("variable", "fixed"):
+        return "plexstim-pat"
     if head.startswith("<"):
         raise CheckError("this XML is not an Intan RHX settings file (no IntanRHX element)")
-    raise CheckError("not a known stimulation file: expected an Intan RHX .xml or an MC_Stimulus ASCII file")
+    raise CheckError("not a known stimulation file: expected an Intan RHX .xml, an MC_Stimulus ASCII file "
+                     "or a PlexStim .pat pattern")
 
 
 def check_text(text: str, kind: Optional[str] = None, *, sample_rate_hz: Optional[float] = None,
@@ -129,6 +142,10 @@ def check_text(text: str, kind: Optional[str] = None, *, sample_rate_hz: Optiona
         if sample_rate_hz is not None or step_ua is not None:
             raise CheckError("--sample-rate-hz and --step-ua apply to Intan RHX files only")
         report = _check_mcs(text, device, range_ua, max_imbalance)
+    elif kind == "plexstim-pat":
+        if any(v is not None for v in (sample_rate_hz, step_ua, device, range_ua)):
+            raise CheckError("--sample-rate-hz, --step-ua, --device and --range-ua do not apply to PlexStim patterns")
+        report = _check_pat(text, max_imbalance)
     else:
         raise CheckError(f"unknown file kind {kind!r}; known: {', '.join(KINDS)}")
     if electrode is not None:
@@ -313,9 +330,11 @@ def _mcs_device(name: str, range_ua: Optional[float]) -> Device:
     return override(dev, time_step_us=MCS_TIME_GRID_US)  # the import's grid
 
 
-def _mcs_channel(name: str, rows: List[Tuple[float, float]], dev: Device, max_imbalance: float) -> ChannelCheck:
+def _mcs_channel(name: str, rows: List[Tuple[float, float]], dev: Device, max_imbalance: float,
+                 grid_us: Optional[float] = MCS_TIME_GRID_US) -> ChannelCheck:
+    """Split rows of (µA, µs) into pulses and check each. grid_us: the time grid the file must use (MCS)."""
     issues: List[Issue] = []
-    off_grid = sorted({t for _, t in rows if abs(t / MCS_TIME_GRID_US - round(t / MCS_TIME_GRID_US)) > 1e-6})
+    off_grid = sorted({t for _, t in rows if grid_us and abs(t / grid_us - round(t / grid_us)) > 1e-6})
     if off_grid:
         issues.append(Issue("SG404", "error", f"times must be multiples of {MCS_TIME_GRID_US:g} µs; "
                                               f"found {', '.join(f'{t:g}' for t in off_grid[:5])} µs"))
@@ -368,6 +387,80 @@ def _mcs_pulses(rows: List[Tuple[float, float]]):
         else:
             yield (v1, t1), 0.0, None
             i += 1
+
+
+# --- Plexon PlexStim .pat ----------------------------------------------------------------------------------------
+
+def _check_pat(text: str, max_imbalance: float) -> CheckReport:
+    lines = [ln.strip() for ln in text.splitlines()]
+    lines = [ln for ln in lines if ln]
+    if not lines:
+        raise CheckError("the pattern file is empty")
+    mode = lines[0].lower()
+    if mode not in ("variable", "fixed"):
+        raise CheckError("a PlexStim pattern starts with the word 'variable' or 'fixed'")
+    values = []
+    for n, ln in enumerate(lines[1:], 2):
+        try:
+            values.append(float(ln))
+        except ValueError:
+            raise CheckError(f"line {n}: expected one number, got {ln!r}") from None
+    issues: List[Issue] = []
+    if mode == "variable":
+        if len(values) % 2:
+            raise CheckError("a 'variable' pattern needs amplitude and duration lines in pairs; the last "
+                             "amplitude has no duration")
+        pairs = list(zip(values[0::2], values[1::2]))
+        if len(pairs) > PLEXSTIM_MAX_PAIRS:
+            issues.append(Issue("SG405", "error", f"{len(pairs)} amplitude-duration pairs; PlexStim takes at "
+                                                  f"most {PLEXSTIM_MAX_PAIRS}"))
+    else:
+        if len(values) < 2:
+            raise CheckError("a 'fixed' pattern needs a duration line and at least one amplitude")
+        step, amps = values[0], values[1:]
+        pairs = [(a, step) for a in amps]
+        if len(amps) > PLEXSTIM_MAX_FIXED_VALUES:
+            issues.append(Issue("SG405", "error", f"{len(amps)} amplitude values; PlexStim takes at most "
+                                                  f"{PLEXSTIM_MAX_FIXED_VALUES}"))
+    if not pairs:
+        raise CheckError("the pattern has no segments")
+    durations = sorted({us for _, us in pairs})
+    bad_us = [us for us in durations if us != int(us) or not 1 <= us <= PLEXSTIM_MAX_DURATION_US]
+    if bad_us:
+        issues.append(Issue("SG405", "error", f"durations must be whole µs from 1 to {PLEXSTIM_MAX_DURATION_US}; "
+                                              f"found {', '.join(f'{us:.10g}' for us in bad_us[:5])}"))
+    bad_na = sorted({na for na, _ in pairs if na != int(na) or abs(na) > PLEXSTIM_MAX_NA})
+    if bad_na:
+        found = ", ".join(f"{na:.10g}" for na in bad_na[:5])
+        issues.append(Issue("SG405", "error", f"amplitudes must be whole nA from -{PLEXSTIM_MAX_NA} to "
+                                              f"{PLEXSTIM_MAX_NA}; found {found}"))
+
+    dev = Device(name="plexstim-pattern", time_step_us=1.0, amplitude_step_ua=0.001,
+                 max_amplitude_ua=PLEXSTIM_MAX_NA / 1000, source="PlexStim pattern file: whole nA and whole µs",
+                 note="The PlexStim hardware rounds amplitudes to about 30 nA.")
+    desc = f"PlexStim pattern ({mode}), {len(pairs)} segments, checked in whole nA and µs"
+    rows = [(na / 1000, us) for na, us in pairs]
+    net_nc = sum(na * us for na, us in pairs) * 1e-6
+    if not any(v for v, _ in rows):
+        off = ChannelCheck("pattern", "off", "no current", issues=issues)
+        return CheckReport("plexstim-pat", dev, desc, [off])
+    if _shaped(rows):  # not rectangular pulses (for example a spike waveform): check the total charge only
+        note = "not made of rectangular pulses, so only its total charge is checked"
+        return CheckReport("plexstim-pat", dev, desc,
+                           [ChannelCheck("pattern", "checked", note, [], issues, total_charge_nc=net_nc)])
+    channel = _mcs_channel("pattern", rows, dev, max_imbalance, grid_us=None)
+    channel.issues = issues + channel.issues
+    return CheckReport("plexstim-pat", dev, desc, [channel])
+
+
+def _shaped(rows: List[Tuple[float, float]]) -> bool:
+    """True if two current segments of the same sign but different amplitude touch: a shaped waveform."""
+    prev = 0.0
+    for v, _ in rows:
+        if v and prev and (v > 0) == (prev > 0) and v != prev:
+            return True
+        prev = v
+    return False
 
 
 # --- helpers -------------------------------------------------------------------------------------------------------

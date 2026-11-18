@@ -10,7 +10,7 @@ SRC = os.path.join(ROOT, "src")
 EXAMPLES = os.path.join(ROOT, "examples")
 sys.path.insert(0, SRC)
 
-from stimgrid import Pulse, Rates, fit, intan_rhs2116, load, mcs_stg4000, mcs_stg5  # noqa: E402
+from stimgrid import Pulse, Rates, fit, intan_rhs2116, load, mcs_stg4000, mcs_stg5, plexon_plexstim  # noqa: E402
 from stimgrid.check import CheckError, check_text, detect  # noqa: E402
 from stimgrid.formats import export  # noqa: E402
 
@@ -161,6 +161,54 @@ class McsCheckTests(unittest.TestCase):
         self.assertEqual(detect("﻿  " + mcs([(1, 100)])), "mcs-ascii")
         c = check_text(mcs([(-2, 100), (2, 100)], extra="# a comment\n"))
         self.assertTrue(c.ok)
+
+
+class PlexStimPatCheckTests(unittest.TestCase):
+    def codes(self, report):
+        return [i.code for c in report.channels for i in c.issues]
+
+    def test_exported_pattern_round_trips_as_balanced(self):
+        device = plexon_plexstim()
+        report = fit(Pulse(20.3, 100, second_amplitude_ua=5.1, second_width_us=400, gap_us=5), device,
+                     Rates(frequency_hz=1000))
+        for pulses in (1, 4):
+            result = check_text(export(report, device, "plexstim-pat", pulses=pulses))
+            self.assertEqual(result.kind, "plexstim-pat")
+            self.assertTrue(result.ok)
+            [channel] = result.checked
+            self.assertEqual(channel.pulses[0].count, pulses)
+            self.assertEqual(channel.net_charge_nc, 0)
+            delivered = channel.pulses[0].report.rounded
+            self.assertEqual((delivered.width_ticks, delivered.gap_ticks), (report.best.width_ticks, 5))
+
+    def test_unbalanced_variable_pattern(self):
+        text = "variable\n-20000\n100\n0\n10\n4900\n400\n"
+        self.assertEqual(detect(text), "plexstim-pat")
+        result = check_text(text)
+        self.assertFalse(result.ok)
+        self.assertAlmostEqual(result.checked[0].net_charge_nc, 0.04, places=9)  # 2 nC out, 1.96 nC back
+
+    def test_fixed_shaped_waveform_checks_total_charge(self):
+        balanced = "fixed\n25\n-5000\n-20000\n-8000\n3000\n20000\n10000\n"
+        result = check_text(balanced)
+        self.assertTrue(result.ok)
+        self.assertIn("total charge", result.checked[0].note)
+        result = check_text("fixed\n25\n-5000\n-20000\n-8000\n3000\n6000\n4000\n")
+        self.assertFalse(result.ok)
+        self.assertAlmostEqual(result.checked[0].net_charge_nc, -0.5, places=9)
+
+    def test_limits_and_bad_files(self):
+        result = check_text("variable\n-2000000\n100\n0.5\n70000\n")
+        self.assertIn("SG405", self.codes(result))
+        self.assertFalse(result.ok)
+        too_long = "variable\n" + "".join("-1000\n10\n1000\n10\n" for _ in range(250))  # 500 pairs
+        self.assertIn("SG405", self.codes(check_text(too_long)))
+        for text in ("variable\n-1000\n", "fixed\n10\n", "variable\n-1000\nten\n"):
+            with self.assertRaises(CheckError):
+                check_text(text)
+        with self.assertRaises(CheckError):
+            check_text("variable\n-1000\n10\n1000\n10\n", step_ua=1)
+        self.assertEqual(check_text("variable\n0\n100\n").channels[0].status, "off")
 
 
 class CliCheckTests(unittest.TestCase):

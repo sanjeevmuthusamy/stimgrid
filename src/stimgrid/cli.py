@@ -3,7 +3,7 @@
   stimgrid fit FILE|-     fit the pulse, or the whole protocol, in a request file (or stdin)
   stimgrid quick ...      fit a pulse given as flags
   stimgrid design ...     list exactly balanced pulses on the grid for a charge and phase ratio
-  stimgrid check FILE     check an existing Intan RHX or MC_Stimulus file
+  stimgrid check FILE     check an existing Intan RHX, MC_Stimulus or PlexStim pattern file
   stimgrid devices        list the built-in device presets
 
 fit, quick and check take --electrode-diameter-um (or --electrode-area-um2) to also
@@ -289,7 +289,8 @@ def render_check(report: CheckReport, path: str) -> str:
         if ch.status != "checked":
             lines.append(f"{'channel ' if ch.channel.isdigit() else ''}{ch.channel}: {ch.status}: {ch.note}")
             continue
-        lines.append(f"{'channel ' if ch.channel.isdigit() else ''}{ch.channel}:")
+        lines.append(f"{'channel ' if ch.channel.isdigit() else ''}{ch.channel}:"
+                     + (f" {ch.note}" if ch.note else ""))
         for p in ch.pulses:
             t = p.report.target
             second = (f"{_f(t['second_amplitude_ua'])} µA x {_f(t['second_width_us'])} µs" if t["biphasic"]
@@ -400,7 +401,7 @@ def _parser() -> argparse.ArgumentParser:
     d.add_argument("--strict", action="store_true", help="treat warnings as failures (exit code 1)")
     d.add_argument("--plot", metavar="FILE", help="also draw the first pulse as an SVG image")
 
-    c = sub.add_parser("check", help="check an existing Intan RHX or MC_Stimulus ASCII file")
+    c = sub.add_parser("check", help="check an existing Intan RHX, MC_Stimulus ASCII or PlexStim .pat file")
     c.add_argument("file")
     c.add_argument("--kind", choices=KINDS, help="the file type (detected from the file by default)")
     c.add_argument("--sample-rate-hz", type=float, help="Intan RHX: when the file does not give it")

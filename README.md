@@ -332,9 +332,9 @@ reported the charge as balanced. No `mcs-ascii` file has been loaded in MC_Stimu
 ## Check an existing file
 
 `stimgrid check` reads a stimulation file you already have and reports, channel by channel, what the
-stimulator will deliver and whether each pulse is charge-balanced. It reads two of the formats that
-export writes: Intan RHX stimulation settings (`.xml`, saved with *File > Save Stimulation Settings*) and
-MC_Stimulus II / III ASCII files (format 4, current mode).
+stimulator will deliver and whether each pulse is charge-balanced. It reads the three formats that
+export writes: Intan RHX stimulation settings (`.xml`, saved with *File > Save Stimulation Settings*),
+MC_Stimulus II / III ASCII files (format 4, current mode) and Plexon PlexStim pattern files (`.pat`).
 
 ```bash
 stimgrid check stim.xml
@@ -382,6 +382,14 @@ and 1 otherwise, so `stimgrid check` can run in a script before each experiment.
 In an MC_Stimulus file, stimgrid splits each channel into pulses: a phase, then an opposite-sign phase
 straight after it or after one zero-current row (the gap). Identical pulses are counted together. A
 phase with no opposite phase after it is reported as monophasic, and so not balanced.
+
+A PlexStim pattern (`variable` or `fixed` format) is split into pulses the same way and checked at the
+file's own resolution, whole nA and whole µs, which is also how PlexStim checks the net charge when it
+loads the file. The hardware then rounds amplitudes to about 30 nA, which is not modelled, because the
+user guide gives no exact figure. A shaped waveform, such as a recorded spike, is not split into pulses:
+only its total net charge is checked. Values PlexStim would not accept are flagged (SG405): more than
+499 pairs (999 values in a `fixed` file), durations that are not whole µs from 1 to 65,535, or
+amplitudes that are not whole nA within ±1,000,000.
 
 ## Whole protocols
 
@@ -636,6 +644,7 @@ A request file with `protocol` instead of `pulse` describes a whole protocol; se
 | SG402 | error | `check`: a phase has zero duration or amplitude |
 | SG403 | error | `check`: an RHX train period is shorter than the pulse, so RHX skips the channel |
 | SG404 | error | `check`: an MC_Stimulus time is not a multiple of 20 µs, or not above zero |
+| SG405 | error | `check`: a value in a PlexStim pattern is outside what PlexStim accepts |
 | SG501 | warning | The Shannon *k* value is above the limit (only with an electrode size) |
 | SG601 | error | Protocol: a burst is longer than one burst period |
 | SG602 | error | Protocol: a ramp level's pulse is longer than one period |

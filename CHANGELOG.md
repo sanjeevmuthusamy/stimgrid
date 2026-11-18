@@ -13,6 +13,9 @@
 - New export format `plexstim-pat`: a Plexon PlexStim arbitrary waveform pattern file, in the documented
   "variable" format (amplitude in nA and duration in µs per segment). Written from the PlexStim user
   guide; not yet tested on a PlexStim.
+- `stimgrid check` reads PlexStim `.pat` patterns too ("variable" and "fixed"): pulses are checked in
+  whole nA and µs, a shaped waveform by its total net charge, and values PlexStim would not accept are
+  flagged as SG405.
 - The `plexon-plexstim` preset now has the software's 5 µs minimum interphase gap (`min_gap_us`), so a
   shorter gap gives SG107, as the PlexStim software would not accept it.
 - The browser page has a "Design a pulse" tab, which appears once the installed stimgrid has `design()`.
