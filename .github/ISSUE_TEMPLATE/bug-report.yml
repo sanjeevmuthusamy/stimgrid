@@ -14,7 +14,7 @@ body:
     attributes:
       label: stimgrid version
       description: The output of `stimgrid --version`.
-      placeholder: "stimgrid 0.6.0"
+      placeholder: "stimgrid 0.7.0"
     validations:
       required: true
 

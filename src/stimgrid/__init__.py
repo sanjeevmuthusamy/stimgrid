@@ -16,7 +16,7 @@ from .loader import InputError, from_dict, load
 from .plot import pulse_svg
 from .protocol import Protocol, ProtocolReport, Ramp, Step, fit_protocol, load_protocol, protocol_from_dict
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 __all__ = [
     "PRESETS", "am_systems_4100", "blackrock_cerestim_r96", "plexon_plexstim",
     "DesignReport", "Option", "design", "pulse_svg",
