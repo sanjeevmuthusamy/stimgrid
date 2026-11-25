@@ -1,0 +1,58 @@
+{
+    "$schema": "https://fundingjson.org/schema/v1.1.0.json",
+    "version": "v1.1.0",
+    "entity": {
+        "type": "individual",
+        "role": "maintainer",
+        "name": "stimgrid maintainers",
+        "email": "contact@bastionoid.com",
+        "phone": "",
+        "description": "Independent maintainer of stimgrid, an open-source tool for charge-balanced electrical neurostimulation, based in India. The work covers development, releases, device presets, user support and documentation.",
+        "webpageUrl": {
+            "url": "https://sanjeevmuthusamy.github.io/stimgrid/",
+            "wellKnown": ""
+        }
+    },
+    "projects": [{
+        "guid": "stimgrid",
+        "name": "stimgrid",
+        "description": "Every neurostimulator rounds current and timing to fixed steps, which can quietly break the charge balance researchers design: a planned asymmetric pulse can end up several percent unbalanced, leaving charge on the electrode with every pulse. Researchers design charge-balanced pulses to limit electrode corrosion and tissue damage. stimgrid shows what a device will actually deliver and finds the nearest pulse on the device's grid whose two phases carry exactly equal charge. It has presets for Intan RHS2116, MCS STG4000/STG5, TDT IZ2, Cortical Labs CL, Blackrock CereStim R96, Plexon PlexStim and A-M Systems 4100. It exports Intan RHX and MCS MC_Stimulus files and checks existing ones. It also reports electrode charge density, and runs in the browser with no install. It is pure Python with no dependencies, tested, on PyPI, and archived on Zenodo with a DOI.",
+        "webpageUrl": {
+            "url": "https://sanjeevmuthusamy.github.io/stimgrid/",
+            "wellKnown": ""
+        },
+        "repositoryUrl": {
+            "url": "https://github.com/sanjeevmuthusamy/stimgrid",
+            "wellKnown": "https://github.com/sanjeevmuthusamy/stimgrid/blob/main/.well-known/funding-manifest-urls"
+        },
+        "licenses": ["spdx:MIT"],
+        "tags": ["neuroscience", "neurotechnology", "scientific-computing", "python", "neurostimulation", "research-software", "electrophysiology", "biomedical-engineering"]
+    }],
+    "funding": {
+        "channels": [{
+            "guid": "bank-transfer",
+            "type": "bank",
+            "address": "",
+            "description": "Bank transfer to an Indian account. Details are shared privately on request."
+        }],
+        "plans": [{
+            "guid": "year-one-development",
+            "status": "active",
+            "name": "Year 1: validation and device coverage",
+            "description": "One year of part-time maintenance and development: (1) measure every device preset on real hardware and publish the results; (2) a validation suite with property-based tests and export-then-check round trips for every format, plus a validation report per release; (3) export for Blackrock, TDT and Cortical Labs, and multi-channel balancing; (4) Python API documentation, example notebooks and a methods paper.",
+            "amount": 25000,
+            "currency": "USD",
+            "frequency": "yearly",
+            "channels": ["bank-transfer"]
+        }, {
+            "guid": "general-support",
+            "status": "active",
+            "name": "General support",
+            "description": "Any amount, to support ongoing maintenance, releases and user support.",
+            "amount": 0,
+            "currency": "USD",
+            "frequency": "one-time",
+            "channels": ["bank-transfer"]
+        }]
+    }
+}
